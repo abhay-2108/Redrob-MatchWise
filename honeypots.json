@@ -1,0 +1,904 @@
+{
+  "CAND_0000848": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0001022": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0001543": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0002078": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0002330": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0003152": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0003582": [
+    "Expert proficiency with 0 months duration on: MLflow, Photoshop, Content Writing"
+  ],
+  "CAND_0003599": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0004012": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0004112": [
+    "Claims employment at Krutrim in 2019, but the company was founded in 2023"
+  ],
+  "CAND_0004678": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0004964": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0005191": [
+    "Claims employment at Sarvam AI in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0005269": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0005509": [
+    "Claims employment at Sarvam AI in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0005649": [
+    "Claims employment at Glance in 2018, but the company was founded in 2019"
+  ],
+  "CAND_0006342": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0006567": [
+    "Claims employment at Glance in 2018, but the company was founded in 2019"
+  ],
+  "CAND_0006687": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0006794": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0007330": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0007353": [
+    "Job at Wayne Enterprises: reported 166 months but calendar span is only 33 months (2023-09-10 → present)",
+    "Job at Wayne Enterprises lasted 13.8 years, exceeding total stated experience of 9.9 years"
+  ],
+  "CAND_0008049": [
+    "Claims employment at Sarvam AI in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0008186": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0008960": [
+    "Job at Stark Industries: reported 171 months but calendar span is only 21 months (2024-09-04 → present)",
+    "Job at Stark Industries lasted 14.2 years, exceeding total stated experience of 10.3 years"
+  ],
+  "CAND_0009014": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0009081": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0010294": [
+    "Job at Mphasis: reported 144 months but calendar span is only 19 months (2024-11-03 → present)",
+    "Job at Mphasis lasted 12.0 years, exceeding total stated experience of 8.0 years"
+  ],
+  "CAND_0010634": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0011263": [
+    "Claims employment at Sarvam AI in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0011327": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0011412": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0011432": [
+    "Claims employment at Krutrim in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0011522": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0011687": [
+    "Claims employment at Krutrim in 2018, but the company was founded in 2023"
+  ],
+  "CAND_0011707": [
+    "Claims employment at Krutrim in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0011801": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0012180": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0013599": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0013939": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0014063": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0015097": [
+    "Claims employment at Krutrim in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0015396": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0015528": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0015620": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0015932": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0016000": [
+    "Expert proficiency with 0 months duration on: TypeScript, Go, Docker, Hadoop, Photoshop"
+  ],
+  "CAND_0016058": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0016170": [
+    "Claims employment at Krutrim in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0016233": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0016657": [
+    "Claims employment at Sarvam AI in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0017038": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0017948": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0017960": [
+    "Claims employment at Sarvam AI in 2018, but the company was founded in 2023"
+  ],
+  "CAND_0017985": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0018013": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0018175": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0018262": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0018293": [
+    "Claims employment at Sarvam AI in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0018515": [
+    "Job at Initech: reported 150 months but calendar span is only 39 months (2023-03-14 → present)",
+    "Job at Initech lasted 12.5 years, exceeding total stated experience of 8.5 years"
+  ],
+  "CAND_0018701": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0019159": [
+    "Claims employment at Krutrim in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0019241": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0020467": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0021274": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0021359": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0021410": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023",
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0021994": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0022043": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0022232": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0022279": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0023084": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0023214": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0023350": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0023592": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0024122": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0024585": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0024878": [
+    "Claims employment at Krutrim in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0025514": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0025923": [
+    "Claims employment at Krutrim in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0026277": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0026301": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0026705": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0027446": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0027926": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0027929": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0028084": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0029170": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0029174": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0029235": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0030530": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0031068": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0031212": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0032331": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0033232": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0033311": [
+    "Claims employment at Sarvam AI in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0033638": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0033817": [
+    "Expert proficiency with 0 months duration on: JavaScript, BigQuery, Six Sigma, gRPC"
+  ],
+  "CAND_0033842": [
+    "Claims employment at Krutrim in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0033861": [
+    "Claims employment at Sarvam AI in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0033972": [
+    "Expert proficiency with 0 months duration on: Airflow, OpenCV, Figma"
+  ],
+  "CAND_0035104": [
+    "Job at Cognizant: reported 114 months but calendar span is only 18 months (2024-12-03 → present)",
+    "Job at Cognizant lasted 9.5 years, exceeding total stated experience of 5.5 years"
+  ],
+  "CAND_0035538": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0035776": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0035779": [
+    "Claims employment at Krutrim in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0036277": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0036839": [
+    "Expert proficiency with 0 months duration on: SAP, GCP, Rust"
+  ],
+  "CAND_0036973": [
+    "Claims employment at Krutrim in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0037000": [
+    "Job at CRED lasted 4.0 years, exceeding total stated experience of 2.7 years"
+  ],
+  "CAND_0037484": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0037539": [
+    "Job at Stark Industries: reported 106 months but calendar span is only 49 months (2022-05-18 → present)",
+    "Job at Stark Industries lasted 8.8 years, exceeding total stated experience of 4.9 years"
+  ],
+  "CAND_0038142": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0038302": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0038405": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0038885": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0039075": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0039132": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0039942": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0040075": [
+    "Job at Pied Piper: reported 228 months but calendar span is only 39 months (2023-03-14 → present)",
+    "Job at Pied Piper lasted 19.0 years, exceeding total stated experience of 15.0 years"
+  ],
+  "CAND_0040099": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0040473": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0040853": [
+    "Job at Initech: reported 61 months but calendar span is only 13 months (2025-05-02 → present)",
+    "Job at Initech lasted 5.1 years, exceeding total stated experience of 1.1 years"
+  ],
+  "CAND_0041009": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0042245": [
+    "Expert proficiency with 0 months duration on: Databricks, BentoML, Vue.js"
+  ],
+  "CAND_0042453": [
+    "Job at Pied Piper: reported 98 months but calendar span is only 50 months (2022-04-18 → present)",
+    "Job at Pied Piper lasted 8.2 years, exceeding total stated experience of 4.2 years"
+  ],
+  "CAND_0043510": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0043721": [
+    "Job at Initech: reported 102 months but calendar span is only 48 months (2022-06-17 → present)",
+    "Job at Initech lasted 8.5 years, exceeding total stated experience of 4.5 years"
+  ],
+  "CAND_0044426": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0045275": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0045566": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0046649": [
+    "Expert proficiency with 0 months duration on: SAP, Node.js, gRPC, Flask, Hadoop"
+  ],
+  "CAND_0046689": [
+    "Expert proficiency with 0 months duration on: Node.js, SQL, gRPC, Spark"
+  ],
+  "CAND_0046841": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0047594": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0048166": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0048303": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0048650": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0048740": [
+    "Expert proficiency with 0 months duration on: gRPC, Angular, Content Writing"
+  ],
+  "CAND_0049978": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0050327": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0050765": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0051245": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0051615": [
+    "Claims employment at Krutrim in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0051678": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0053734": [
+    "Job at Globex Inc: reported 151 months but calendar span is only 32 months (2023-10-10 → present)",
+    "Job at Globex Inc lasted 12.6 years, exceeding total stated experience of 8.6 years"
+  ],
+  "CAND_0054035": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0054327": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0054991": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0055685": [
+    "Job at Acme Corp: reported 64 months but calendar span is only 16 months (2025-02-01 → present)",
+    "Job at Acme Corp lasted 5.3 years, exceeding total stated experience of 1.4 years"
+  ],
+  "CAND_0055792": [
+    "Expert proficiency with 0 months duration on: Scrum, TTS, LoRA"
+  ],
+  "CAND_0055905": [
+    "Claims employment at Rephrase.ai in 2018, but the company was founded in 2019"
+  ],
+  "CAND_0056472": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0056983": [
+    "Expert proficiency with 0 months duration on: Rust, Next.js, Redis, Salesforce CRM, MongoDB"
+  ],
+  "CAND_0057574": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0057711": [
+    "Job at Capgemini: reported 140 months but calendar span is only 51 months (2022-03-19 → present)",
+    "Job at Capgemini lasted 11.7 years, exceeding total stated experience of 7.7 years"
+  ],
+  "CAND_0057987": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0058242": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0058324": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0058517": [
+    "Claims employment at Krutrim in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0058988": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0059198": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0059520": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0060297": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0060585": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0060642": [
+    "Expert proficiency with 0 months duration on: Milvus, Agile, Azure, Diffusion Models, MongoDB"
+  ],
+  "CAND_0060835": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0061156": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0061339": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0061655": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0061722": [
+    "Expert proficiency with 0 months duration on: Terraform, GANs, Milvus, MongoDB, Speech Recognition"
+  ],
+  "CAND_0062617": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0062655": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0062856": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0063661": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0063736": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0063862": [
+    "Claims employment at Krutrim in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0063888": [
+    "Expert proficiency with 0 months duration on: Project Management, Accounting, MLOps, React, Webpack"
+  ],
+  "CAND_0063932": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0064077": [
+    "Job at Hooli: reported 169 months but calendar span is only 51 months (2022-03-19 → present)",
+    "Job at Hooli lasted 14.1 years, exceeding total stated experience of 10.1 years"
+  ],
+  "CAND_0065032": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0065052": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0065096": [
+    "Expert proficiency with 0 months duration on: ETL, Tally, Flask, Rust"
+  ],
+  "CAND_0065398": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0065450": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0065701": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0065710": [
+    "Job at Hooli: reported 100 months but calendar span is only 38 months (2023-04-13 → present)",
+    "Job at Hooli lasted 8.3 years, exceeding total stated experience of 4.4 years"
+  ],
+  "CAND_0065878": [
+    "Claims employment at Rephrase.ai in 2018, but the company was founded in 2019"
+  ],
+  "CAND_0065927": [
+    "Claims employment at Krutrim in 2019, but the company was founded in 2023"
+  ],
+  "CAND_0066538": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0066791": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0067100": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0067183": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0067375": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0067949": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0068513": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0068932": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0068946": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0068975": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0069028": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0069141": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018",
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0069248": [
+    "Claims employment at Sarvam AI in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0069780": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0069975": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0070189": [
+    "Job at Wayne Enterprises: reported 130 months but calendar span is only 39 months (2023-03-14 → present)",
+    "Job at Wayne Enterprises lasted 10.8 years, exceeding total stated experience of 6.9 years"
+  ],
+  "CAND_0070429": [
+    "Expert proficiency with 0 months duration on: MLOps, Figma, Accounting, YOLO, Java"
+  ],
+  "CAND_0070612": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0070653": [
+    "Claims employment at Krutrim in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0070808": [
+    "Claims employment at Krutrim in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0071115": [
+    "Claims employment at Krutrim in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0072018": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0072032": [
+    "Claims employment at Krutrim in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0072232": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0072379": [
+    "Expert proficiency with 0 months duration on: Azure, Redux, Illustrator, Spark"
+  ],
+  "CAND_0072414": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0073173": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0073681": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0073702": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0073737": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0073828": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0073853": [
+    "Expert proficiency with 0 months duration on: CI/CD, Marketing, GCP, Excel, AWS"
+  ],
+  "CAND_0074452": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0074650": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0075500": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0075550": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0075970": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0076030": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0076076": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0076183": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0076516": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0077239": [
+    "Job at Dunder Mifflin: reported 139 months but calendar span is only 49 months (2022-05-18 → present)",
+    "Job at Dunder Mifflin lasted 11.6 years, exceeding total stated experience of 7.6 years"
+  ],
+  "CAND_0077296": [
+    "Claims employment at Sarvam AI in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0077302": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0077343": [
+    "Claims employment at Sarvam AI in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0077763": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0078019": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0078334": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0079416": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0079662": [
+    "Claims employment at Krutrim in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0080371": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0080514": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0081372": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0081462": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0081480": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0081746": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0081778": [
+    "Claims employment at Sarvam AI in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0082202": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0082425": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0084182": [
+    "Job at Hooli: reported 200 months but calendar span is only 51 months (2022-03-19 → present)",
+    "Job at Hooli lasted 16.7 years, exceeding total stated experience of 12.7 years"
+  ],
+  "CAND_0084283": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0084378": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0085851": [
+    "Claims employment at Sarvam AI in 2020, but the company was founded in 2023"
+  ],
+  "CAND_0085973": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0086642": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0086690": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018",
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0086757": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0086966": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0087120": [
+    "Claims employment at Krutrim in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0087665": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0087960": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0087987": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0088355": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0088385": [
+    "Claims employment at Krutrim in 2019, but the company was founded in 2023"
+  ],
+  "CAND_0088441": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0088878": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0089406": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0089702": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0091080": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0091102": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0091496": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0091653": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0092105": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0092267": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0093364": [
+    "Job at Globex Inc: reported 142 months but calendar span is only 26 months (2024-04-07 → present)",
+    "Job at Globex Inc lasted 11.8 years, exceeding total stated experience of 7.9 years"
+  ],
+  "CAND_0093499": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0093547": [
+    "Job at Sarvam AI lasted 3.6 years, exceeding total stated experience of 2.9 years",
+    "Claims employment at Sarvam AI in 2021, but the company was founded in 2023"
+  ],
+  "CAND_0093556": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0094223": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0094252": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0094374": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0094430": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0094449": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0095140": [
+    "Expert proficiency with 0 months duration on: Kafka, QLoRA, CNN"
+  ],
+  "CAND_0095308": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0095317": [
+    "Expert proficiency with 0 months duration on: Webpack, Figma, dbt"
+  ],
+  "CAND_0095480": [
+    "Expert proficiency with 0 months duration on: Agile, React, Snowflake, Content Writing"
+  ],
+  "CAND_0095595": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0096108": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0096589": [
+    "Claims employment at Sarvam AI in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0096635": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0096747": [
+    "Claims employment at CRED in 2016, but the company was founded in 2018"
+  ],
+  "CAND_0096823": [
+    "Claims employment at Krutrim in 2022, but the company was founded in 2023"
+  ],
+  "CAND_0097115": [
+    "Claims employment at CRED in 2017, but the company was founded in 2018"
+  ],
+  "CAND_0099581": [
+    "Claims employment at Sarvam AI in 2020, but the company was founded in 2023"
+  ]
+}

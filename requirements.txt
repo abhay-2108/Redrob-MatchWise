@@ -1,0 +1,8 @@
+# Redrob Hackathon — Python Dependencies
+# Minimal footprint for CPU-only, offline ranking.
+
+streamlit>=1.30.0
+sentence-transformers
+rank-bm25
+numpy
+torchvision
