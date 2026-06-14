@@ -49,6 +49,7 @@ import csv
 import gzip
 import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -251,6 +252,62 @@ PROF_MULTIPLIER = {"beginner": 0.5, "intermediate": 0.75, "advanced": 1.0, "expe
 # ║                   ATD SCORING (AXIS A)                               ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
+def canonicalize_skill(skill_name: str) -> str:
+    """Normalize and map skill name to canonical taxonomy keys."""
+    name = skill_name.lower().strip()
+    # Remove common punctuation/connectors
+    name = re.sub(r'[^a-z0-9+ ]', '', name)
+    # Remove multiple spaces
+    name = re.sub(r'\s+', ' ', name)
+    
+    # Exact aliases mapping
+    aliases = {
+        "finetuning": "fine-tuning llms",
+        "fine tuning": "fine-tuning llms",
+        "fine tuning llms": "fine-tuning llms",
+        "finetuning llms": "fine-tuning llms",
+        "llm finetuning": "fine-tuning llms",
+        "llm fine tuning": "fine-tuning llms",
+        "sentence transformer": "sentence-transformers",
+        "sentencetransformers": "sentence-transformers",
+        "sentencetransformer": "sentence-transformers",
+        "vector db": "vector database",
+        "vector dbs": "vector database",
+        "vector databases": "vector database",
+        "vector database": "vector database",
+        "vector searches": "vector search",
+        "hybrid searches": "hybrid search",
+        "semantic searches": "semantic search",
+        "recommendation system": "recommendation systems",
+        "recommendation engine": "recommendation systems",
+        "recommendation engines": "recommendation systems",
+        "recsys": "recommendation systems",
+        "ab testing": "a/b testing",
+        "llama index": "llamaindex",
+        "lang chain": "langchain",
+        "openai": "openai api",
+        "prompt engineering": "prompt engineering",
+        "embeddings": "embeddings",
+        "embedding": "embeddings",
+    }
+    
+    # Check direct alias
+    if name in aliases:
+        return aliases[name]
+    
+    # Check if any taxonomy key is a substring or close match
+    for taxonomy_key in ATD_TAXONOMY.keys():
+        cleaned_key = re.sub(r'[^a-z0-9+ ]', '', taxonomy_key).strip()
+        # Exact match of cleaned
+        if name == cleaned_key:
+            return taxonomy_key
+        # Substring match for compound words (e.g. pytorch in pytorch lightning)
+        if len(cleaned_key) > 3 and (cleaned_key in name or name in cleaned_key):
+            return taxonomy_key
+            
+    return name
+
+
 def compute_atd(skills: list[dict], career: list[dict]) -> float:
     """Compute Absolute Technical Dominance score.
 
@@ -264,7 +321,7 @@ def compute_atd(skills: list[dict], career: list[dict]) -> float:
     weighted_depth = 0.0
 
     for s in skills:
-        name = s.get("name", "").lower().strip()
+        name = canonicalize_skill(s.get("name", ""))
         level = ATD_TAXONOMY.get(name, 0)
         if level > 0:
             dur = s.get("duration_months", 0)
@@ -320,55 +377,66 @@ def compute_atd(skills: list[dict], career: list[dict]) -> float:
 # ║                   HEA SCORING (AXIS B)                               ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
-def compute_hea(candidate: dict) -> float:
+def compute_hea(candidate: dict, weights: dict = None) -> float:
     """Compute High Execution Agency multiplier.
 
     Evaluates behavioral signals, career structure, and generalist-bleed
     to determine if the candidate has "founding engineer" DNA.
 
-    Returns a multiplier in [0.2, 2.0].
+    Supports custom parameter weights passed as a dictionary.
+
+    Returns a multiplier in [0.2, 3.0].
     """
     signals = candidate.get("redrob_signals", {})
     skills  = candidate.get("skills", [])
     career  = candidate.get("career_history", [])
     profile = candidate.get("profile", {})
 
+    w = weights or {}
+    w_title = w.get("title", 1.20)
+    w_exp = w.get("experience", 1.10)
+    w_github = w.get("github", 0.35)
+    w_fullstack = w.get("fullstack", 1.15)
+    w_startup = w.get("startup", 1.15)
+    w_product = w.get("product", 1.15)
+    w_recency = w.get("recency", 1.0)
+    w_notice = w.get("notice", 1.0)
+    w_responsiveness = w.get("responsiveness", 0.60)
+    w_interview = w.get("interview", 0.45)
+    w_open_to_work = w.get("open_to_work", 1.05)
+    w_location_india = w.get("location_india", 0.70)
+    w_location_city = w.get("location_city", 1.10)
+
     hea = 1.0  # Start neutral
 
     # ── 1. Title fit ──────────────────────────────────────────────────
     curr_title = profile.get("current_title", "").lower().strip()
     if curr_title in CORE_AI_TITLES:
-        hea *= 1.20   # Strong title alignment
+        hea *= w_title
     elif curr_title in SWE_TITLES:
         hea *= 1.0    # Neutral — could be great, need other signals
     else:
         # Check career history for any tech title
         career_titles = {j.get("title", "").lower().strip() for j in career}
         if career_titles & CORE_AI_TITLES:
-            hea *= 0.9   # Previously had a relevant title
+            hea *= (1.0 + (w_title - 1.0) * 0.5) if w_title > 1.0 else 0.9
         elif career_titles & SWE_TITLES:
             hea *= 0.7   # Tech background at least
         else:
             hea *= 0.3   # Non-tech career → strong penalty
 
-    # ── 2. Experience band (JD says 5-9 ideal) ───────────────────────
+    # ── 2. Experience band (sweet spot around 7 years - continuous Gaussian) ──
     years = profile.get("years_of_experience", 0)
-    if 5.0 <= years <= 9.0:
-        hea *= 1.10   # Sweet spot
-    elif 4.0 <= years < 5.0 or 9.0 < years <= 12.0:
-        hea *= 1.0    # Acceptable
-    elif 3.0 <= years < 4.0 or 12.0 < years <= 15.0:
-        hea *= 0.85   # Getting far from ideal
-    else:
-        hea *= 0.65   # Too junior or too senior
+    # Peak at 7 years, decay on both sides. Max bonus is w_exp.
+    exp_factor = 0.65 + (w_exp - 0.65) * math.exp(-((years - 7.0) ** 2) / 18.0)
+    hea *= exp_factor
 
     # ── 3. GitHub activity (0-100 scale, -1 = not linked) ─────────────
     # Continuous: smoothly rewards higher GitHub activity for granularity
     gh = signals.get("github_activity_score", -1)
     if gh >= 0:
-        # Continuous scale: 0→0.95, 50→1.125, 100→1.30
-        hea *= 0.95 + 0.35 * (gh / 100.0)
-    # gh == -1: no GitHub → neutral (no penalty, no bonus)
+        # Continuous scale: e.g. gh=0 -> 0.95, gh=100 -> 0.95 + w_github
+        hea *= 0.95 + w_github * (gh / 100.0)
 
     # ── 4. Generalist Bleed: DevOps/Backend alongside AI ─────────────
     skill_names = {s.get("name", "").lower().strip() for s in skills}
@@ -376,9 +444,9 @@ def compute_hea(candidate: dict) -> float:
     backend_count = len(skill_names & BACKEND_SKILLS)
 
     if devops_count >= 2 or backend_count >= 2:
-        hea *= 1.15   # Full-stack builder who deploys own code
+        hea *= w_fullstack
     elif devops_count >= 1 or backend_count >= 1:
-        hea *= 1.05
+        hea *= 1.0 + (w_fullstack - 1.0) * 0.33
 
     # ── 5. Startup / Small-Company Signal (Chaos Tolerance) ──────────
     small_company_stints = sum(
@@ -386,9 +454,9 @@ def compute_hea(candidate: dict) -> float:
         if j.get("company_size", "") in ("1-10", "11-50", "51-200")
     )
     if small_company_stints >= 2:
-        hea *= 1.15   # Proven startup survivor
+        hea *= w_startup
     elif small_company_stints >= 1:
-        hea *= 1.05
+        hea *= 1.0 + (w_startup - 1.0) * 0.33
 
     # ── 6. Product Company vs Services ────────────────────────────────
     product_stints = sum(
@@ -396,55 +464,43 @@ def compute_hea(candidate: dict) -> float:
         if j.get("industry", "").lower() in PRODUCT_INDUSTRIES
     )
     if product_stints >= 3:
-        hea *= 1.15   # Deep product DNA
+        hea *= w_product
     elif product_stints >= 2:
-        hea *= 1.10
+        hea *= 1.0 + (w_product - 1.0) * 0.66
     elif product_stints >= 1:
         hea *= 1.0
     else:
         hea *= 0.80   # No product company experience at all
 
-    # ── 7. Active recency ─────────────────────────────────────────────
+    # ── 7. Active recency (continuous sigmoid decay) ──────────────────
     last_active = signals.get("last_active_date")
     if last_active:
         try:
             last_dt = datetime.strptime(last_active, "%Y-%m-%d")
             days_inactive = (REF_DATE - last_dt).days
-            if days_inactive <= 30:
-                hea *= 1.05   # Very recently active
-            elif days_inactive <= 90:
-                hea *= 1.0
-            elif days_inactive <= 180:
-                hea *= 0.70
-            else:
-                hea *= 0.30   # Ghost profile
+            # Smooth sigmoid decay mapping 0 days -> ~1.05, 180 days -> ~0.3
+            recency_factor = 0.25 + 0.80 / (1.0 + math.exp((days_inactive - 110) / 30.0))
+            hea *= 1.0 + (recency_factor - 1.0) * w_recency
         except (ValueError, TypeError):
             pass
 
-    # ── 8. Notice period ──────────────────────────────────────────────
+    # ── 8. Notice period (continuous sigmoid decay) ───────────────────
     notice = signals.get("notice_period_days", 180)
-    if notice <= 30:
-        hea *= 1.05
-    elif notice <= 60:
-        hea *= 1.0
-    elif notice <= 90:
-        hea *= 0.90
-    else:
-        hea *= 0.80
+    # Smooth sigmoid mapping notice <= 30 -> ~1.02, notice > 90 -> ~0.75
+    notice_factor = 0.75 + 0.30 / (1.0 + math.exp((notice - 70) / 20.0))
+    hea *= 1.0 + (notice_factor - 1.0) * w_notice
 
     # ── 9. Recruiter responsiveness (continuous) ───────────────────────
-    # Continuous: maps 0.0→0.50, 0.5→0.875, 1.0→1.10
     resp = signals.get("recruiter_response_rate", 0.0)
-    hea *= 0.50 + 0.60 * resp
+    hea *= 0.50 + w_responsiveness * resp
 
     # ── 10. Interview completion (continuous) ──────────────────────────
-    # Continuous: maps 0.0→0.60, 0.5→0.825, 1.0→1.05
     int_rate = signals.get("interview_completion_rate", 0.0)
-    hea *= 0.60 + 0.45 * int_rate
+    hea *= 0.60 + w_interview * int_rate
 
     # ── 11. Open to work ──────────────────────────────────────────────
     if signals.get("open_to_work_flag", False):
-        hea *= 1.05
+        hea *= w_open_to_work
 
     # ── 12. Profile completeness ──────────────────────────────────────
     completeness = signals.get("profile_completeness_score", 50.0)
@@ -457,7 +513,7 @@ def compute_hea(candidate: dict) -> float:
 
     if country == "india":
         if any(c in location for c in ("pune", "noida")):
-            hea *= 1.10   # Target city
+            hea *= w_location_city
         elif any(c in location for c in ("bangalore", "hyderabad", "mumbai",
                                           "delhi", "gurgaon", "ncr", "ghaziabad")):
             hea *= 1.05   # Nearby Indian city
@@ -466,21 +522,53 @@ def compute_hea(candidate: dict) -> float:
         else:
             hea *= 0.90   # India but remote city, not willing to relocate
     else:
-        hea *= 0.70   # Non-India penalty
+        hea *= w_location_india
 
-    # ── 14. The Authenticity Check ────────────────────────────────────
-    # Cross-reference: non-technical title with SOTA AI skills → fraud signal
-    # (Already hard-filtered in main, but add a penalty for borderline cases)
+    # ── 14. Richer Honeypot & Fraud Checks ────────────────────────────
+    # A. Timeline overlapping clash (simultaneous full-time stints)
+    has_timeline_clash = False
+    stints = []
+    for j in career:
+        start_str = j.get("start_date")
+        end_str = j.get("end_date")
+        if start_str:
+            try:
+                start_dt = datetime.strptime(start_str, "%Y-%m-%d")
+                end_dt = datetime.strptime(end_str, "%Y-%m-%d") if end_str else REF_DATE
+                stints.append((start_dt, end_dt))
+            except (ValueError, TypeError):
+                pass
+    stints.sort()
+    for i in range(len(stints) - 1):
+        if stints[i+1][0] < stints[i][1]:
+            overlap_days = (stints[i][1] - stints[i+1][0]).days
+            if overlap_days > 90:  # More than 3 months overlap is a fraud signal
+                has_timeline_clash = True
+                break
+    if has_timeline_clash:
+        hea *= 0.40  # Severe penalty for fake overlapping timeline
+
+    # B. Buzzword Stuffing (extremely high skill count relative to experience)
+    if years > 0 and len(skills) / years > 6.0:
+        hea *= 0.60  # Suspected keyword-stuffed profile
+    elif len(skills) > 30:
+        hea *= 0.50  # Skill count too high to be realistic
+
+    # C. Title Inflation (VP/Director/Lead with very low experience)
     curr_title_lower = profile.get("current_title", "").lower()
+    is_inflated = any(kw in curr_title_lower for kw in ("vp", "vice president", "chief", "principal", "director", "lead", "head"))
+    if is_inflated and years < 4.0:
+        hea *= 0.50  # Severe title inflation penalty
+
+    # D. Legacy Unrelated Title without Tech History
     if any(kw in curr_title_lower for kw in UNRELATED_TITLE_KEYWORDS):
-        # Check if they have ANY career history in tech
         career_titles_text = " ".join(j.get("title", "") for j in career).lower()
         has_any_tech = any(
             kw in career_titles_text
             for kw in ("engineer", "developer", "scientist", "ml", "ai", "data")
         )
         if not has_any_tech:
-            hea *= 0.10   # Almost certainly a fake AI profile
+            hea *= 0.10   # Fake AI profile penalty
 
     # Clamp to [0.2, 3.0] — wider range for granularity at the top
     return max(0.2, min(3.0, hea))

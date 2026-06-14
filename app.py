@@ -16,6 +16,7 @@ import csv
 import io
 import json
 import os
+import pandas as pd
 import time
 
 import streamlit as st
@@ -176,15 +177,43 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("""
     **How to use:**
-    1. Upload a `.json` or `.jsonl` file containing candidate profiles
-    2. The ranker scores and ranks candidates in real-time
-    3. Download the ranked CSV output
-
-    **Constraints enforced:**
-    - CPU only, no GPU
-    - No external API calls
-    - Top 100 candidates max
+    1. Adjust scoring weights in the settings below.
+    2. Upload a `.json` or `.jsonl` file of candidates.
+    3. The ranker scores and ranks candidates in real-time.
+    4. Download the ranked CSV output.
     """)
+    st.markdown("---")
+    
+    st.markdown("### ⚙️ Scoring Calibration")
+    
+    w_title = st.slider("Core AI Title Bonus", 1.0, 2.0, 1.20, 0.05, 
+                        help="Multiplier for candidates holding Senior AI/ML/NLP/Search titles currently.")
+    w_exp = st.slider("Experience Sweet Spot Weight", 1.0, 2.0, 1.10, 0.05, 
+                      help="Peak score bonus for candidates with ~7 years of experience.")
+    w_github = st.slider("GitHub Activity Weight", 0.1, 1.0, 0.35, 0.05,
+                         help="Weight for GitHub activity continuous bonus.")
+    w_fullstack = st.slider("DevOps / Full-stack Bonus", 1.0, 1.5, 1.15, 0.05,
+                            help="Multiplier for founding engineers with DevOps/Backend skills.")
+    w_startup = st.slider("Startup Survival Bonus", 1.0, 1.5, 1.15, 0.05,
+                          help="Multiplier for candidates with experience at small companies.")
+    w_product = st.slider("Product DNA Weight", 1.0, 1.5, 1.15, 0.05,
+                          help="Multiplier for candidates with product company stints.")
+    w_recency = st.slider("Active Recency Weight", 0.0, 2.0, 1.0, 0.1,
+                          help="Importance of recent platform activity vs inactive ghost profiles.")
+    w_notice = st.slider("Notice Period Weight", 0.0, 2.0, 1.0, 0.1,
+                         help="Importance of short notice periods (<=30 days).")
+    
+    custom_weights = {
+        "title": w_title,
+        "experience": w_exp,
+        "github": w_github,
+        "fullstack": w_fullstack,
+        "startup": w_startup,
+        "product": w_product,
+        "recency": w_recency,
+        "notice": w_notice,
+    }
+    
     st.markdown("---")
     st.markdown("Built for the **Redrob Intelligent Candidate Discovery & Ranking Challenge**")
 
@@ -279,7 +308,7 @@ if uploaded is not None:
             if atd < 0.10:
                 continue
 
-            hea = compute_hea(cand)
+            hea = compute_hea(cand, custom_weights)
             score = compute_singularity_score(atd, hea)
             scored.append((cid, score, cand, atd, hea))
 
@@ -320,6 +349,33 @@ if uploaded is not None:
             <div class="metric-label">Runtime</div>
         </div>
         """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # ── Scatter plot (ATD vs HEA) ─────────────────────────────────────
+    st.markdown("### 📊 Candidate Distribution (ATD vs HEA)")
+    
+    chart_data = []
+    for rank_idx, (cid, score, cand, atd, hea) in enumerate(top, start=1):
+        prof = cand.get("profile", {})
+        chart_data.append({
+            "Rank": f"#{rank_idx}",
+            "Candidate": prof.get("anonymized_name", cid),
+            "Technical Floor (ATD)": float(atd),
+            "Execution Agency (HEA)": float(hea),
+            "Final Score": float(score)
+        })
+    
+    if chart_data:
+        df = pd.DataFrame(chart_data)
+        st.scatter_chart(
+            df,
+            x="Technical Floor (ATD)",
+            y="Execution Agency (HEA)",
+            size="Final Score",
+            color="Rank",
+            use_container_width=True
+        )
 
     st.markdown("---")
 
