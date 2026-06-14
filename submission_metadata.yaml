@@ -4,25 +4,25 @@
 # ============================================================================
 # Team identity
 # ============================================================================
-team_name: "TODO_YOUR_TEAM_NAME"  # Replace with your registered team name
+team_name: "abhay-2108"  # Replace with your registered team name
 
 primary_contact:
-  name: "TODO_YOUR_NAME"
-  email: "TODO@example.com"
+  name: "Abhay Tiwari"
+  email: "abhaytiwari0821@gmail.com"
   phone: "+91-XXXXXXXXXX"
 
 team_members:
-  - name: "TODO_MEMBER_NAME"
-    email: "TODO@example.com"
+  - name: "Abhay Tiwari"
+    email: "abhaytiwari0821@gmail.com"
     role: "ML Engineer"
 
 # ============================================================================
 # Code and reproducibility
 # ============================================================================
-github_repo: "https://github.com/TODO_USERNAME/redrob-ranker"
-sandbox_link: "https://huggingface.co/spaces/TODO_USERNAME/redrob-ranker"
+github_repo: "https://github.com/abhay-2108/Redrob-MatchWise"
+sandbox_link: "https://huggingface.co/spaces/abhay-2108/Redrob-MatchWise"
 
-reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv"
+reproduce_command: "python rank.py --candidates ./docs/candidates.jsonl --out ./submission.csv"
 
 # ============================================================================
 # Compute environment
@@ -53,16 +53,20 @@ ai_usage_summary: |
 # Approach summary
 # ============================================================================
 methodology_summary: |
-  A 4-layer hybrid ranking system matching candidates to the Job Description:
-  1. Semantic similarity via L2-normalized sentence embeddings (all-MiniLM-L6-v2),
-     pre-computed for viable profiles with lazy on-the-fly fallback (30%).
-  2. Keyword relevance using BM25 Okapi search over candidate profiles (25%).
-  3. Five-component heuristics: title fit, experience band, weighted skills
-     depth (with endorsement/duration multipliers), and location fit (25%).
-  4. Behavioral availability modifier (notice period, active recency, response (20%).
-  Honeypots pre-filtered via calendar/tenure anomalies. Dynamic reasoning generated
-  deterministically using profile facts and hash-based variations.
-  Runs in ~23 seconds for 100K candidates on CPU.
+  An ultra-efficient, non-linear candidate matching system (The Singularity Engine)
+  designed to match candidates to the Job Description with zero keyword-trap vulnerability:
+  1. Score = (ATD ^ 1.5) * HEA, implementing non-linear scaling where Axis A is
+     Absolute Technical Dominance (ATD) and Axis B is High Execution Agency (HEA).
+  2. ATD is computed via a hardcoded hierarchical 4-level AI taxonomy (Core, Applied
+     SOTA, Standard AI, Wrappers) matching skills and career description keywords,
+     with breadth/depth bonuses and a CV/speech-only penalty.
+  3. HEA is a multiplicative modifier compiled from 14 behavioral/career signals:
+     title fit, experience sweet spot, github activity, startup survival, product DNA,
+     active recency, notice period, responsiveness, relocate willingness, etc.
+  4. Three hard filters: Anomalous honeypots (pre-computed), service-only career
+     histories, and unrelated titles lacking technical history.
+  5. Pre-computed high-quality LLM-generated reasonings for the top candidates.
+  Runs in ~20 seconds for 100K candidates on CPU.
 
 # ============================================================================
 # Declarations

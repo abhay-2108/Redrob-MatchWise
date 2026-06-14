@@ -1,8 +1,5 @@
 # Redrob Hackathon — Python Dependencies
-# Minimal footprint for CPU-only, offline ranking.
+# Ultra-lean: pure Python math, zero ML inference at ranking time.
+# The Singularity Engine uses only the standard library for scoring.
 
 streamlit>=1.30.0
-sentence-transformers
-rank-bm25
-numpy
-torchvision

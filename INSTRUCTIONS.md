@@ -53,11 +53,6 @@ uv pip install -r requirements.txt
 pip install -r requirements.txt
 ```
 
-*(Optional CPU Optimization: If PyTorch installs with GPU-CUDA support on a non-GPU machine, you can force install the lighter CPU-only package)*:
-```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-```
-
 ---
 
 ## 3. Data Preparation
@@ -69,7 +64,7 @@ Place the candidate pool file inside the `docs/` directory:
 
 ## 4. Pre-computation (Offline Steps)
 
-Before running the ranker, you must generate the honeypot list and the dense semantic vectors. These steps run offline (once) and do not count toward the 5-minute sandbox budget.
+Before running the ranker, you must generate the honeypot list and can optionally pre-compute the high-quality LLM reasoning cache for the top candidates. These steps run offline (once) and do not count toward the 5-minute sandbox budget.
 
 ### Step 4.1: Identify Honeypots & Anomalies
 Scans profiles for tenure contradictions or impossible credentials:
@@ -78,23 +73,27 @@ python identify_all_honeypots.py --candidates ./docs/candidates.jsonl --out ./ho
 ```
 *Output: Generates `honeypots.json` (identifies 293 anomalous candidate IDs to be hard-filtered).*
 
-### Step 4.2: Generate Candidate & JD Embeddings
-Pre-computes sentence embeddings for all viable candidates using the `all-MiniLM-L6-v2` transformer model:
+### Step 4.2: Pre-compute LLM Reasoning Cache
+Generates high-quality, factual reasoning strings for the top candidates using Google Gemini API (recommended) or a local model. This cache is saved as `reasoning_cache.json` and read by the ranker during runtime:
 ```bash
-python precompute_embeddings.py --candidates ./docs/candidates.jsonl
+# Using Gemini API (requires GEMINI_API_KEY env variable set)
+python precompute_reasoning.py --mode gemini --top-n 500
+
+# Or using a local model (requires installing transformers and torch)
+python precompute_reasoning.py --mode local --top-n 300
 ```
-*Output: Generates `candidate_embeddings.npy`, `jd_embedding.npy`, and `candidate_ids.json` in the root folder (takes ~19 minutes on CPU).*
+*Output: Generates `reasoning_cache.json` containing detailed, non-templated reasoning explanations.*
 
 ---
 
 ## 5. Running the Ranking Pipeline (Stage 3 Sandbox Entry Point)
 
-Run the main ranker script. This command performs hard filtering, loads pre-computed embeddings, tokenizes candidate profiles to build a BM25 Okapi index, scores candidates, and generates the final CSV submission.
+Run the main ranker script. This command performs hard filtering (honeypots, service-only careers, unrelated titles), evaluates candidates using the hierarchical AI difficulty taxonomy (ATD) and the 14-signal execution agency multiplier (HEA), resolves tiebreaks continuously, loads the pre-computed reasoning cache (falling back to taxonomy-based generator if missing), and writes the final CSV submission.
 
 ```bash
 python rank.py --candidates ./docs/candidates.jsonl --out ./submission.csv
 ```
-* **Expected Runtime:** ~23 seconds on CPU.
+* **Expected Runtime:** ~20 seconds on CPU.
 * **Output:** Writes the top 100 ranked candidates to `submission.csv`.
 
 ---

@@ -24,16 +24,16 @@ import streamlit as st
 # We import the scoring and reasoning functions directly so the sandbox
 # uses the exact same logic as the CLI ranker.
 from rank import (
-    score_candidate,
+    compute_atd,
+    compute_hea,
+    compute_singularity_score,
     generate_reasoning,
     load_honeypots,
+    load_reasoning_cache,
     SERVICE_COMPANIES,
     UNRELATED_TITLES,
     CORE_IR_SKILLS,
-    ADVANCED_ML_SKILLS,
-    load_precomputed_embeddings,
-    get_cosine_scores,
-    get_bm25_scores,
+    ATD_TAXONOMY,
 )
 
 
@@ -42,8 +42,8 @@ from rank import (
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 @st.cache_resource
-def get_cached_embeddings():
-    return load_precomputed_embeddings()
+def get_cached_reasoning():
+    return load_reasoning_cache()
 
 st.set_page_config(
     page_title="Redrob MatchWise",
@@ -238,45 +238,50 @@ if uploaded is not None:
 
     # Score candidates
     with st.spinner("Scoring and ranking candidates..."):
-        # Load precomputed embeddings (cached resource)
-        cand_embs, jd_emb, id_to_idx = get_cached_embeddings()
+        # Load reasoning cache (cached resource)
+        reasoning_cache = get_cached_reasoning()
 
-        # Apply hard filters first (BM25 needs to run on viable candidate corpus)
-        valid_candidates = []
+        scored = []
         for cand in candidates:
             cid = cand.get("candidate_id", "")
+
+            # ── Hard filter 1: Honeypots ──
             if cid in honeypot_ids:
                 continue
+
             profile = cand.get("profile", {})
-            career = cand.get("career_history", [])
-            
-            # Service-only career -> disqualify
+            career  = cand.get("career_history", [])
+            skills  = cand.get("skills", [])
+
+            # ── Hard filter 2: Service-only career ──
             companies = {j.get("company") for j in career if j.get("company")}
             if companies and all(c in SERVICE_COMPANIES for c in companies):
                 continue
-                
-            # Current title is completely unrelated -> disqualify
+
+            # ── Hard filter 3: Unrelated current title with no tech history ──
             curr_title = profile.get("current_title", "").lower().strip()
             if curr_title in UNRELATED_TITLES:
-                continue
-                
-            valid_candidates.append(cand)
+                career_titles_text = " ".join(
+                    j.get("title", "") for j in career
+                ).lower()
+                has_tech_history = any(
+                    kw in career_titles_text
+                    for kw in ("engineer", "developer", "scientist", "ml",
+                               "ai", "data", "research")
+                )
+                if not has_tech_history:
+                    continue
 
-        if valid_candidates:
-            # Compute BM25 scores
-            bm25_scores = get_bm25_scores(valid_candidates)
-            # Compute cosine similarities (loads ST model on-the-fly if missing from cache)
-            cos_scores = get_cosine_scores(valid_candidates, cand_embs, jd_emb, id_to_idx)
-            
-            scored = []
-            for cand in valid_candidates:
-                cid = cand.get("candidate_id", "")
-                cos_val = cos_scores.get(cid, 0.0)
-                bm25_val = bm25_scores.get(cid, 0.0)
-                sc, debug = score_candidate(cand, honeypot_ids, cos_score=cos_val, bm25_score=bm25_val)
-                scored.append((cid, sc, cand, debug))
-        else:
-            scored = []
+            # ── Compute scores ──
+            atd = compute_atd(skills, career)
+
+            # ── Soft filter: ATD too low (pure Level 1 / no AI skills) ──
+            if atd < 0.10:
+                continue
+
+            hea = compute_hea(cand)
+            score = compute_singularity_score(atd, hea)
+            scored.append((cid, score, cand, atd, hea))
 
         scored.sort(key=lambda x: (-x[1], x[0]))
         top = scored[:100]
@@ -322,10 +327,14 @@ if uploaded is not None:
     st.markdown("### 🏆 Ranked Candidates")
 
     csv_rows = []
-    for rank_idx, (cid, score, cand, debug) in enumerate(top, start=1):
+    for rank_idx, (cid, score, cand, atd, hea) in enumerate(top, start=1):
         prof = cand.get("profile", {})
         skills_list = [s.get("name", "") for s in cand.get("skills", [])]
-        reasoning = generate_reasoning(cand, rank_idx)
+        
+        # Look up reasoning from cache or generate on-the-fly
+        reasoning = reasoning_cache.get(cid, "")
+        if not reasoning:
+            reasoning = generate_reasoning(cand, rank_idx, atd, hea)
 
         csv_rows.append({
             "candidate_id": cid,
@@ -336,12 +345,13 @@ if uploaded is not None:
 
         # Highlight core skills
         core_matched = [s for s in skills_list if s.lower() in CORE_IR_SKILLS]
-        adv_matched  = [s for s in skills_list if s.lower() in ADVANCED_ML_SKILLS]
+        # SOTA skills (level 3 or 4 in taxonomy)
+        sota_matched = [s for s in skills_list if ATD_TAXONOMY.get(s.lower(), 0) >= 3]
 
         skill_chips = ""
         for s in core_matched[:5]:
             skill_chips += f'<span class="skill-chip" style="border-color: rgba(34,197,94,0.4); color: #4ade80;">{s}</span>'
-        for s in adv_matched[:3]:
+        for s in sota_matched[:5]:
             skill_chips += f'<span class="skill-chip">{s}</span>'
 
         st.markdown(f"""

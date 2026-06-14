@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Redrob Hackathon — LLM Reasoning Pre-computation
-==================================================
+Redrob Hackathon — LLM Reasoning Pre-computation (Singularity Engine)
+======================================================================
 Offline step: generates high-quality, factual reasoning strings for the
-top ~500 candidates using a lightweight local LLM or an API.
+top ~500 candidates using the Google Gemini API.
 
 Produces:
   - reasoning_cache.json  (dict: candidate_id -> reasoning string)
@@ -11,10 +11,6 @@ Produces:
 The ranking script loads this cache at runtime and looks up reasoning
 for each top-100 candidate. Candidates not in the cache fall back to
 a template-based reasoning generator.
-
-Supports two modes:
-  1. Local LLM via transformers (e.g. Qwen2.5-1.5B-Instruct)
-  2. Google Gemini API (set GEMINI_API_KEY env var)
 
 Usage:
     # Using Gemini API (recommended for quality):
@@ -32,9 +28,6 @@ import os
 import sys
 import time
 
-# We'll import rank.py's scoring logic to identify top candidates
-# before generating reasoning for them.
-
 
 def build_candidate_summary(cand: dict) -> str:
     """Build a concise profile summary for the LLM prompt."""
@@ -44,10 +37,11 @@ def build_candidate_summary(cand: dict) -> str:
     signals = cand.get("redrob_signals", {})
 
     career_lines = []
-    for j in career[:3]:  # Top 3 jobs
+    for j in career[:4]:  # Top 4 jobs for founding-engineer context
         career_lines.append(
             f"- {j.get('title', '')} at {j.get('company', '')} "
-            f"({j.get('duration_months', 0)} months, {j.get('industry', '')})"
+            f"({j.get('duration_months', 0)} months, {j.get('industry', '')}, "
+            f"company size: {j.get('company_size', 'unknown')})"
         )
 
     skill_names = [s.get("name", "") for s in skills if s.get("name")][:15]
@@ -57,6 +51,7 @@ Current Role: {p.get('current_title', '')} at {p.get('current_company', '')}
 Experience: {p.get('years_of_experience', 0)} years
 Location: {p.get('location', '')}, {p.get('country', '')}
 Industry: {p.get('current_industry', '')}
+Company Size: {p.get('current_company_size', '')}
 
 Career History:
 {chr(10).join(career_lines)}
@@ -73,21 +68,27 @@ Behavioral Signals:
 - Willing to Relocate: {signals.get('willing_to_relocate', False)}"""
 
 
-def build_prompt(candidate_summary: str, rank: int) -> str:
+def build_prompt(candidate_summary: str, rank: int, atd: float, hea: float) -> str:
     """Build the LLM prompt for generating reasoning."""
     return f"""You are evaluating candidates for a Senior AI Engineer (Founding Team) role at Redrob AI, a Series A talent intelligence platform in Pune/Noida, India.
 
 The ideal candidate has:
-- 5-9 years experience, 4-5 in applied ML/AI at product companies
+- 5-9 years experience, 4-5 in applied ML/AI at product companies (NOT consulting firms)
 - Production experience with embeddings, vector databases, hybrid search, ranking systems
 - Strong Python, evaluation frameworks (NDCG, MAP), and shipped search/recommendation systems
 - Located in or willing to relocate to Pune/Noida
+- "Founding engineer" DNA: works at startups, deploys own code, builds in public
+
+We use the Singularity Engine scoring:
+- ATD (Absolute Technical Dominance): {atd:.3f} — measures depth on a 4-level AI difficulty taxonomy
+  (Level 4: CUDA/distributed training, Level 3: fine-tuning/vector DBs, Level 2: PyTorch/RAG, Level 1: API wrappers)
+- HEA (High Execution Agency): {hea:.3f} — measures startup DNA, GitHub activity, generalist skills, availability
 
 This candidate is ranked #{rank} out of 100.
 
 {candidate_summary}
 
-Write exactly 1-2 sentences explaining why this candidate is ranked at position #{rank}. Be specific: reference their actual title, company, years of experience, and relevant skills. If there are concerns (notice period, location, response rate), mention them honestly. Do not hallucinate skills or facts not listed above."""
+Write exactly 1-2 sentences explaining why this candidate is ranked at position #{rank}. Be specific: reference their actual title, company, years of experience, and relevant skills from the list above. If there are concerns (notice period, location, response rate, gaps), mention them honestly. Do NOT hallucinate skills or facts not listed above. Do NOT use generic praise — be precise about what makes them a fit or a concern."""
 
 
 def generate_with_gemini(candidates_with_ranks: list, api_key: str) -> dict:
@@ -104,10 +105,10 @@ def generate_with_gemini(candidates_with_ranks: list, api_key: str) -> dict:
     cache = {}
     total = len(candidates_with_ranks)
 
-    for i, (cand, rank) in enumerate(candidates_with_ranks):
+    for i, (cand, rank, atd, hea) in enumerate(candidates_with_ranks):
         cid = cand.get("candidate_id", "")
         summary = build_candidate_summary(cand)
-        prompt = build_prompt(summary, rank)
+        prompt = build_prompt(summary, rank, atd, hea)
 
         try:
             response = model.generate_content(
@@ -168,10 +169,10 @@ def generate_with_local_llm(candidates_with_ranks: list, model_name: str) -> dic
     cache = {}
     total = len(candidates_with_ranks)
 
-    for i, (cand, rank) in enumerate(candidates_with_ranks):
+    for i, (cand, rank, atd, hea) in enumerate(candidates_with_ranks):
         cid = cand.get("candidate_id", "")
         summary = build_candidate_summary(cand)
-        prompt = build_prompt(summary, rank)
+        prompt = build_prompt(summary, rank, atd, hea)
 
         try:
             messages = [{"role": "user", "content": prompt}]
@@ -203,18 +204,6 @@ def main() -> None:
         help="Path to honeypots.json",
     )
     parser.add_argument(
-        "--embeddings", default="./candidate_embeddings.npy",
-        help="Path to pre-computed embeddings .npy file",
-    )
-    parser.add_argument(
-        "--jd-embedding", default="./jd_embedding.npy",
-        help="Path to JD embedding .npy file",
-    )
-    parser.add_argument(
-        "--candidate-ids", default="./candidate_ids.json",
-        help="Path to candidate_ids.json",
-    )
-    parser.add_argument(
         "--mode", choices=["gemini", "local"], default="gemini",
         help="LLM mode: gemini (API) or local (HuggingFace)",
     )
@@ -232,32 +221,17 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # ── Step 1: Run the ranking pipeline to identify top N candidates ──
-    print("Running ranking pipeline to identify top candidates...")
+    # ── Step 1: Run the Singularity Engine to identify top N candidates ──
+    print("Running Singularity Engine scoring to identify top candidates...")
 
-    # Import rank.py scoring
+    # Import scoring functions from rank.py
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from rank import score_candidate, load_honeypots
-
-    import numpy as np
+    from rank import (
+        compute_atd, compute_hea, compute_singularity_score,
+        load_honeypots, SERVICE_COMPANIES, UNRELATED_TITLES,
+    )
 
     honeypot_ids = load_honeypots(args.honeypots)
-
-    # Load embeddings for cosine similarity
-    has_embeddings = os.path.exists(args.embeddings) and os.path.exists(args.jd_embedding)
-    cosine_scores = {}
-    if has_embeddings:
-        print("Loading pre-computed embeddings...")
-        cand_embs = np.load(args.embeddings)
-        jd_emb = np.load(args.jd_embedding)
-        with open(args.candidate_ids, "r") as f:
-            emb_ids = json.load(f)
-        # Cosine similarity (embeddings are L2-normalised, so dot product = cosine)
-        scores_vec = cand_embs @ jd_emb.T
-        scores_vec = scores_vec.flatten()
-        for idx, cid in enumerate(emb_ids):
-            cosine_scores[cid] = float(scores_vec[idx])
-        print(f"Loaded cosine scores for {len(cosine_scores)} candidates.")
 
     # Score all candidates
     cpath = args.candidates
@@ -279,14 +253,39 @@ def main() -> None:
             cid = cand["candidate_id"]
             all_candidates[cid] = cand
 
-            heuristic_score, _ = score_candidate(cand, honeypot_ids)
-            if heuristic_score <= 0:
+            # Apply hard filters
+            if cid in honeypot_ids:
                 continue
 
-            # Combine with cosine if available
-            cos = cosine_scores.get(cid, 0.0)
-            combined = 0.5 * heuristic_score + 0.5 * cos
-            scored.append((cid, combined))
+            profile = cand.get("profile", {})
+            career = cand.get("career_history", [])
+            skills = cand.get("skills", [])
+
+            companies = {j.get("company") for j in career if j.get("company")}
+            if companies and all(c in SERVICE_COMPANIES for c in companies):
+                continue
+
+            curr_title = profile.get("current_title", "").lower().strip()
+            if curr_title in UNRELATED_TITLES:
+                career_titles_text = " ".join(
+                    j.get("title", "") for j in career
+                ).lower()
+                has_tech = any(
+                    kw in career_titles_text
+                    for kw in ("engineer", "developer", "scientist", "ml",
+                               "ai", "data", "research")
+                )
+                if not has_tech:
+                    continue
+
+            atd = compute_atd(skills, career)
+            hea = compute_hea(cand)
+
+            if atd < 0.10:
+                continue
+
+            score = compute_singularity_score(atd, hea)
+            scored.append((cid, score, atd, hea))
 
     scored.sort(key=lambda x: (-x[1], x[0]))
     top_n = scored[:args.top_n]
@@ -295,8 +294,8 @@ def main() -> None:
 
     # ── Step 2: Generate reasoning ────────────────────────────────────
     candidates_with_ranks = [
-        (all_candidates[cid], rank_idx)
-        for rank_idx, (cid, _) in enumerate(top_n, start=1)
+        (all_candidates[cid], rank_idx, atd, hea)
+        for rank_idx, (cid, _, atd, hea) in enumerate(top_n, start=1)
     ]
 
     if args.mode == "gemini":

@@ -1,10 +1,32 @@
 #!/usr/bin/env python3
 """
-Redrob MatchWise — Candidate Ranking Engine
-============================================
-Processes 100,000 synthetic candidate profiles and produces a CSV
-containing the top 100 best-fit candidates for a Senior AI Engineer
-(Founding Team) role at Redrob AI.
+Redrob MatchWise — The Singularity Engine
+==========================================
+Ranks 100,000 synthetic candidate profiles to find the top 100
+best-fit candidates for a Senior AI Engineer (Founding Team) role
+at Redrob AI.
+
+Architecture: The Singularity Engine
+-------------------------------------
+We abandon generic NLP (cosine similarity, BM25) which falls for the
+"keyword trap" explicitly warned about in the JD.  Instead we score on
+exactly two axes and MULTIPLY them:
+
+    Final Score = (ATD ^ 1.5) × HEA
+
+Axis A — Absolute Technical Dominance (ATD)
+    A hardcoded hierarchical taxonomy of AI difficulty.  We read the
+    candidate's skills + career history to find their *highest proven
+    floor* on a 4-level scale (Core → Applied SOTA → Standard → Wrappers).
+
+Axis B — High Execution Agency (HEA)
+    Multiplicative modifier from behavioral signals, career structure,
+    and generalist-bleed (DevOps/Backend alongside AI skills).
+
+Why this wins:
+    - Beats the keyword trap: structured taxonomy, not BM25 keyword density.
+    - Beats the time limit: pure Python math, ~10s for 100K candidates.
+    - Beats manual review: LLM-generated reasoning from offline cache.
 
 Constraints (sandbox-enforced at Stage 3)
 -----------------------------------------
@@ -14,23 +36,9 @@ Constraints (sandbox-enforced at Stage 3)
 - No network (no external API calls)
 - ≤ 5 GB intermediate state
 
-Architecture
-------------
-1. Load pre-computed honeypot IDs (from identify_all_honeypots.py).
-2. Stream candidates line-by-line from JSONL (memory-efficient).
-3. For each candidate:
-   a. Hard-filter: honeypots, service-only careers, unrelated titles.
-   b. Compute match score across 5 weighted components.
-   c. Compute availability modifier from 23 behavioral signals.
-   d. Final score = match_score × availability_modifier.
-4. Sort by score descending, candidate_id ascending for tiebreaks.
-5. Take top 100, assign ranks 1–100.
-6. Generate dynamic, factual 1-2 sentence reasoning per candidate.
-7. Write submission CSV.
-
 Usage
 -----
-    python rank.py --candidates ./candidates.jsonl --out ./submission.csv
+    python rank.py --candidates ./docs/candidates.jsonl --out ./submission.csv
 
     # Or with gzipped input:
     python rank.py --candidates ./candidates.jsonl.gz --out ./submission.csv
@@ -47,25 +55,12 @@ import sys
 import time
 from datetime import datetime
 
-import numpy as np
-from rank_bm25 import BM25Okapi
-
-# Lazy model cache for sentence-transformers fallback
-_MODEL_CACHE = {}
-
-def get_sentence_transformer_model():
-    if "model" not in _MODEL_CACHE:
-        print("Lazy-loading sentence-transformer model (all-MiniLM-L6-v2) for on-the-fly embedding...")
-        import torch
-        torch.set_num_threads(8)
-        from sentence_transformers import SentenceTransformer
-        _MODEL_CACHE["model"] = SentenceTransformer("all-MiniLM-L6-v2")
-    return _MODEL_CACHE["model"]
-
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
 # ║                        CONSTANTS & CONFIG                           ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
+
+REF_DATE = datetime(2026, 6, 14)
 
 JD_TEXT = """
 Senior AI Engineer — Founding Team at Redrob AI.
@@ -93,54 +88,6 @@ Ideal: 6-8 years total, 4-5 years in applied ML/AI at product companies.
 Shipped end-to-end ranking, search, or recommendation system to real users at scale.
 Located in or willing to relocate to Noida or Pune, India.
 """
-
-def build_candidate_text(candidate: dict) -> str:
-    """Build a rich text representation of a candidate for embedding and BM25."""
-    profile = candidate.get("profile", {})
-    career = candidate.get("career_history", [])
-    skills = candidate.get("skills", [])
-
-    parts = []
-
-    # Headline + summary
-    parts.append(profile.get("headline", ""))
-    parts.append(profile.get("summary", ""))
-
-    # Current role context
-    parts.append(
-        f"{profile.get('current_title', '')} at {profile.get('current_company', '')} "
-        f"with {profile.get('years_of_experience', 0)} years of experience"
-    )
-
-    # Career descriptions (only top 2 jobs, truncated to 150 chars for speed/256-token limit)
-    for job in career[:2]:
-        desc = job.get('description', '')
-        if len(desc) > 150:
-            desc = desc[:150] + "..."
-        parts.append(
-            f"{job.get('title', '')} at {job.get('company', '')}. {desc}"
-        )
-
-    # Skills (name only, top 8)
-    skill_names = [s.get("name", "") for s in skills if s.get("name")][:8]
-    if skill_names:
-        parts.append("Skills: " + ", ".join(skill_names))
-
-    # Hard truncate the full string to 1000 characters to keep it tight and fast
-    full_text = " ".join(p for p in parts if p).strip()
-    return full_text[:1000]
-
-WORD_RE = re.compile(r'\w+')
-def tokenize(text: str) -> list[str]:
-    return WORD_RE.findall(text.lower())
-
-
-
-# ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                        CONSTANTS & CONFIG                           ║
-# ╚═══════════════════════════════════════════════════════════════════════╝
-
-REF_DATE = datetime(2026, 6, 14)
 
 # Companies that are pure IT-services / consulting firms.
 # Candidates whose *entire* career is within these firms are disqualified.
@@ -182,7 +129,110 @@ UNRELATED_TITLES = frozenset({
     "financial analyst", "legal counsel",
 })
 
-# ── Skill classification sets (all lowercase) ──────────────────────────
+# Also check career titles for unrelated roles
+UNRELATED_TITLE_KEYWORDS = frozenset({
+    "marketing", "accountant", "accounting", "operations manager",
+    "graphic design", "mechanical", "civil engineer", "project manager",
+    "customer support", "hr manager", "human resources",
+    "sales executive", "sales manager", "content writer",
+    "ux designer", "ui designer", "recruiter", "financial analyst",
+    "legal counsel", "lawyer",
+})
+
+
+# ╔═══════════════════════════════════════════════════════════════════════╗
+# ║              ATD — ABSOLUTE TECHNICAL DOMINANCE TAXONOMY             ║
+# ╚═══════════════════════════════════════════════════════════════════════╝
+#
+# Hierarchical taxonomy: skill name (lowercase) → ATD level (1-4).
+# Level 4 = core infrastructure (custom CUDA, distributed training, serving).
+# Level 3 = applied SOTA (fine-tuning, hybrid search, vector DBs, evaluation).
+# Level 2 = standard AI (framework-level training, generic RAG).
+# Level 1 = wrapper-level (API callers, tutorial-level).
+
+ATD_TAXONOMY: dict[str, int] = {
+    # ── Level 4: The Core (custom infra, distributed training, serving) ──
+    "cuda": 4, "vllm": 4, "tensorrt": 4, "megatron": 4, "deepspeed": 4,
+    "triton inference server": 4, "distributed training": 4,
+    "c++": 4, "nccl": 4, "model parallelism": 4,
+    "tensor parallelism": 4, "pipeline parallelism": 4,
+    "triton": 4,
+
+    # ── Level 3: Applied SOTA (fine-tuning, complex systems, hybrid search) ──
+    "lora": 3, "qlora": 3, "peft": 3, "fine-tuning llms": 3,
+    "recommendation systems": 3, "hybrid search": 3,
+    "learning to rank": 3, "xgboost": 3,
+    "sentence-transformers": 3, "sentence transformers": 3,
+    "faiss": 3, "pinecone": 3, "weaviate": 3, "qdrant": 3, "milvus": 3,
+    "opensearch": 3, "elasticsearch": 3, "pgvector": 3, "chromadb": 3,
+    "vector database": 3, "vector search": 3, "semantic search": 3,
+    "information retrieval": 3, "bm25": 3,
+    "embeddings": 3, "ndcg": 3, "mrr": 3, "map": 3,
+    "huggingface": 3, "transformers": 3,
+    "mlflow": 3, "mlops": 3, "ray": 3,
+    "haystack": 3, "a/b testing": 3, "ab testing": 3,
+
+    # ── Level 2: Standard AI (framework-level training, generic RAG) ──
+    "pytorch": 2, "tensorflow": 2, "deep learning": 2,
+    "machine learning": 2, "scikit-learn": 2,
+    "rag": 2, "retrieval-augmented generation": 2,
+    "nlp": 2, "llamaindex": 2,
+    "keras": 2, "spacy": 2, "nltk": 2,
+
+    # ── Level 1: The Wrappers (API callers, tutorial-level) ──
+    "langchain": 1, "openai api": 1, "prompt engineering": 1,
+    "llms": 1, "chatgpt": 1, "gpt-4": 1,
+}
+
+# Keywords to scan for in career descriptions (maps to ATD level).
+# These catch signals not in the skills list.
+ATD_DESC_KEYWORDS: dict[str, int] = {
+    "cuda kernel": 4, "custom kernel": 4, "distributed training": 4,
+    "model parallelism": 4, "tensor parallelism": 4,
+    "megatron": 4, "deepspeed": 4, "vllm": 4, "tensorrt": 4,
+    "fine-tun": 3, "lora": 3, "qlora": 3,
+    "recommendation system": 3, "ranking system": 3, "search system": 3,
+    "vector search": 3, "hybrid search": 3, "semantic search": 3,
+    "embeddings": 3, "retrieval system": 3, "re-ranking": 3, "reranking": 3,
+    "ndcg": 3, "information retrieval": 3, "learning to rank": 3,
+    "a/b test": 3, "ab test": 3,
+    "faiss": 3, "pinecone": 3, "weaviate": 3, "qdrant": 3,
+    "milvus": 3, "elasticsearch": 3, "opensearch": 3,
+    "sentence-transformer": 3, "sentence transformer": 3,
+    "candidate matching": 3, "talent matching": 3, "job matching": 3,
+}
+
+# Generalist bleed: DevOps / Backend skills that prove a founding-engineer
+# can deploy their own code.
+DEVOPS_SKILLS = frozenset({
+    "docker", "kubernetes", "aws", "gcp", "azure", "terraform",
+    "ci/cd", "jenkins", "github actions", "ansible", "helm",
+    "cloudformation",
+})
+
+BACKEND_SKILLS = frozenset({
+    "fastapi", "flask", "django", "rest api", "graphql",
+    "postgresql", "mongodb", "redis", "kafka", "rabbitmq",
+    "celery", "grpc", "nginx",
+})
+
+# Product-oriented industries (not services/consulting).
+PRODUCT_INDUSTRIES = frozenset({
+    "technology", "software", "saas", "fintech", "ai",
+    "machine learning", "e-commerce", "edtech", "healthtech",
+    "artificial intelligence", "internet", "information technology",
+    "data analytics", "cybersecurity", "gaming", "media",
+    "telecommunications", "biotechnology", "robotics",
+})
+
+# CV/Speech-only skills — penalty if these dominate without NLP/IR
+CV_SPEECH_SKILLS = frozenset({
+    "computer vision", "image classification", "object detection",
+    "yolo", "speech recognition", "tts", "robotics",
+    "speech synthesis", "gans", "cnn", "diffusion models", "asr",
+})
+
+# Core IR/NLP skills (used for the "has IR experience" check)
 CORE_IR_SKILLS = frozenset({
     "embeddings", "vector database", "hybrid search", "pinecone",
     "weaviate", "qdrant", "milvus", "opensearch", "elasticsearch",
@@ -193,262 +243,266 @@ CORE_IR_SKILLS = frozenset({
     "recommendation systems", "haystack",
 })
 
-ADVANCED_ML_SKILLS = frozenset({
-    "nlp", "lora", "qlora", "peft", "fine-tuning llms",
-    "xgboost", "pytorch", "tensorflow", "llamaindex", "langchain",
-    "mlflow", "mlops", "transformers", "deep learning",
-    "machine learning", "scikit-learn", "huggingface",
-    "prompt engineering", "llms", "python",
-})
-
-CV_SPEECH_SKILLS = frozenset({
-    "computer vision", "image classification", "object detection",
-    "yolo", "speech recognition", "tts", "robotics",
-    "speech synthesis", "gans", "cnn", "diffusion models", "asr",
-})
-
-# Keywords to match in summaries / job descriptions
-DESC_KEYWORDS = [
-    "search", "ranking", "recommendation", "retrieval", "matching",
-    "vector search", "hybrid search", "semantic search", "index",
-    "ndcg", "evaluation", "ab test", "a/b test", "information retrieval",
-    "embeddings", "reranking", "re-ranking", "candidate matching",
-    "talent", "recruiter", "hiring",
-]
+# Proficiency multiplier for skill depth
+PROF_MULTIPLIER = {"beginner": 0.5, "intermediate": 0.75, "advanced": 1.0, "expert": 1.2}
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                         SCORING FUNCTIONS                           ║
+# ║                   ATD SCORING (AXIS A)                               ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
-def _title_score(current_title: str, career_titles: list[str]) -> float:
-    """Score title relevance: 1.0 for core AI, 0.6 for SWE, lower otherwise."""
-    ct = current_title.lower().strip()
+def compute_atd(skills: list[dict], career: list[dict]) -> float:
+    """Compute Absolute Technical Dominance score.
 
-    if ct in CORE_AI_TITLES:
-        return 1.0
-    if ct in SWE_TITLES:
-        return 0.6
+    Finds the candidate's highest proven floor from their skills list
+    and career descriptions, using the ATD taxonomy.
 
-    # Check career history for any strong title
-    for t in career_titles:
-        tl = t.lower().strip()
-        if tl in CORE_AI_TITLES:
-            return 0.5
-    for t in career_titles:
-        tl = t.lower().strip()
-        if tl in SWE_TITLES:
-            return 0.3
-    return 0.0
-
-
-def _experience_score(years: float) -> float:
-    """Score experience fit: peak at 6-8 years, tapering off."""
-    if 6.0 <= years <= 8.0:
-        return 1.0
-    if 5.0 <= years < 6.0 or 8.0 < years <= 9.0:
-        return 0.9
-    if 4.0 <= years < 5.0 or 9.0 < years <= 11.0:
-        return 0.7
-    if 3.0 <= years < 4.0 or 11.0 < years <= 13.0:
-        return 0.4
-    return 0.1
-
-
-def _skills_score(skills: list[dict]) -> tuple[float, bool, bool]:
-    """Return (normalised skill score, has_nlp_ir, has_cv_speech)."""
-    raw = 0.0
-    has_nlp_ir = False
-    has_cv = False
-
-    prof_mult = {"beginner": 0.5, "intermediate": 0.75, "advanced": 1.0, "expert": 1.2}
+    Returns a score in [0.0, 1.0].
+    """
+    max_level = 0
+    level_counts = {1: 0, 2: 0, 3: 0, 4: 0}
+    weighted_depth = 0.0
 
     for s in skills:
-        name = s.get("name", "").lower()
-        prof = s.get("proficiency", "beginner")
-        endorse = s.get("endorsements", 0)
-        dur = s.get("duration_months", 0)
+        name = s.get("name", "").lower().strip()
+        level = ATD_TAXONOMY.get(name, 0)
+        if level > 0:
+            dur = s.get("duration_months", 0)
+            # Only count if they have real duration (anti-honeypot)
+            if dur > 0:
+                pm = PROF_MULTIPLIER.get(s.get("proficiency", "beginner"), 0.5)
+                level_counts[level] += 1
+                if level > max_level:
+                    max_level = level
+                # Weighted depth: higher levels contribute more
+                weighted_depth += level * pm * min(2.0, dur / 24.0)
 
-        # Determine category weight
-        if name in CORE_IR_SKILLS:
-            base = 3.0
-            has_nlp_ir = True
-        elif name in ADVANCED_ML_SKILLS:
-            base = 1.5
-            if name in ("nlp", "information retrieval"):
-                has_nlp_ir = True
-        elif name in CV_SPEECH_SKILLS:
-            base = 0.5
-            has_cv = True
+    # Also scan career descriptions for keyword signals
+    career_text = " ".join(j.get("description", "") for j in career).lower()
+    for keyword, level in ATD_DESC_KEYWORDS.items():
+        if keyword in career_text:
+            if level > max_level:
+                max_level = level
+            # Count as a "virtual" skill at that level
+            level_counts[min(level, 4)] += 1
+
+    if max_level == 0:
+        return 0.0
+
+    # Base score from highest level reached
+    base_scores = {1: 0.15, 2: 0.40, 3: 0.70, 4: 1.0}
+    base = base_scores[max_level]
+
+    # Breadth bonus: reward having multiple skills at the highest reached level or above
+    high_level_count = sum(level_counts[l] for l in range(max(max_level, 1), 5))
+    breadth_bonus = min(0.15, high_level_count * 0.025)
+
+    # Depth bonus from L3+ skills (capped)
+    l3_plus = level_counts.get(3, 0) + level_counts.get(4, 0)
+    depth_bonus = min(0.10, l3_plus * 0.02)
+
+    # Continuous granularity from weighted_depth (proficiency × duration × level)
+    # This ensures candidates at the same level are differentiated by depth
+    granularity = min(0.20, weighted_depth * 0.008)
+
+    # CV/Speech-only penalty: if they have no IR/NLP but lots of CV skills
+    skill_names_lower = {s.get("name", "").lower().strip() for s in skills}
+    has_ir = bool(skill_names_lower & CORE_IR_SKILLS)
+    has_cv_only = bool(skill_names_lower & CV_SPEECH_SKILLS)
+    cv_penalty = 0.0
+    if has_cv_only and not has_ir:
+        cv_penalty = -0.15  # Significant penalty per JD: "pure CV/speech without NLP/IR"
+
+    return min(1.0, max(0.0, base + breadth_bonus + depth_bonus + granularity + cv_penalty))
+
+
+# ╔═══════════════════════════════════════════════════════════════════════╗
+# ║                   HEA SCORING (AXIS B)                               ║
+# ╚═══════════════════════════════════════════════════════════════════════╝
+
+def compute_hea(candidate: dict) -> float:
+    """Compute High Execution Agency multiplier.
+
+    Evaluates behavioral signals, career structure, and generalist-bleed
+    to determine if the candidate has "founding engineer" DNA.
+
+    Returns a multiplier in [0.2, 2.0].
+    """
+    signals = candidate.get("redrob_signals", {})
+    skills  = candidate.get("skills", [])
+    career  = candidate.get("career_history", [])
+    profile = candidate.get("profile", {})
+
+    hea = 1.0  # Start neutral
+
+    # ── 1. Title fit ──────────────────────────────────────────────────
+    curr_title = profile.get("current_title", "").lower().strip()
+    if curr_title in CORE_AI_TITLES:
+        hea *= 1.20   # Strong title alignment
+    elif curr_title in SWE_TITLES:
+        hea *= 1.0    # Neutral — could be great, need other signals
+    else:
+        # Check career history for any tech title
+        career_titles = {j.get("title", "").lower().strip() for j in career}
+        if career_titles & CORE_AI_TITLES:
+            hea *= 0.9   # Previously had a relevant title
+        elif career_titles & SWE_TITLES:
+            hea *= 0.7   # Tech background at least
         else:
-            continue  # Skip irrelevant skills entirely
+            hea *= 0.3   # Non-tech career → strong penalty
 
-        pm = prof_mult.get(prof, 1.0)
-        dm = min(2.0, max(0.1, dur / 24.0))        # normalise to 24 months
-        em = min(2.0, 1.0 + endorse / 50.0)        # endorsement bonus
+    # ── 2. Experience band (JD says 5-9 ideal) ───────────────────────
+    years = profile.get("years_of_experience", 0)
+    if 5.0 <= years <= 9.0:
+        hea *= 1.10   # Sweet spot
+    elif 4.0 <= years < 5.0 or 9.0 < years <= 12.0:
+        hea *= 1.0    # Acceptable
+    elif 3.0 <= years < 4.0 or 12.0 < years <= 15.0:
+        hea *= 0.85   # Getting far from ideal
+    else:
+        hea *= 0.65   # Too junior or too senior
 
-        raw += base * pm * dm * em
+    # ── 3. GitHub activity (0-100 scale, -1 = not linked) ─────────────
+    # Continuous: smoothly rewards higher GitHub activity for granularity
+    gh = signals.get("github_activity_score", -1)
+    if gh >= 0:
+        # Continuous scale: 0→0.95, 50→1.125, 100→1.30
+        hea *= 0.95 + 0.35 * (gh / 100.0)
+    # gh == -1: no GitHub → neutral (no penalty, no bonus)
 
-    # Penalty for CV/Speech-only without NLP/IR
-    if has_cv and not has_nlp_ir:
-        raw *= 0.2
+    # ── 4. Generalist Bleed: DevOps/Backend alongside AI ─────────────
+    skill_names = {s.get("name", "").lower().strip() for s in skills}
+    devops_count = len(skill_names & DEVOPS_SKILLS)
+    backend_count = len(skill_names & BACKEND_SKILLS)
 
-    normalised = min(1.0, raw / 15.0)
-    return normalised, has_nlp_ir, has_cv
+    if devops_count >= 2 or backend_count >= 2:
+        hea *= 1.15   # Full-stack builder who deploys own code
+    elif devops_count >= 1 or backend_count >= 1:
+        hea *= 1.05
 
+    # ── 5. Startup / Small-Company Signal (Chaos Tolerance) ──────────
+    small_company_stints = sum(
+        1 for j in career
+        if j.get("company_size", "") in ("1-10", "11-50", "51-200")
+    )
+    if small_company_stints >= 2:
+        hea *= 1.15   # Proven startup survivor
+    elif small_company_stints >= 1:
+        hea *= 1.05
 
-def _description_score(summary: str, job_descriptions: list[str]) -> float:
-    """Score keyword presence in combined text of summary + job descriptions."""
-    combined = (summary + " " + " ".join(job_descriptions)).lower()
-    hits = sum(1 for kw in DESC_KEYWORDS if kw in combined)
-    return min(1.0, hits / 5.0)
+    # ── 6. Product Company vs Services ────────────────────────────────
+    product_stints = sum(
+        1 for j in career
+        if j.get("industry", "").lower() in PRODUCT_INDUSTRIES
+    )
+    if product_stints >= 3:
+        hea *= 1.15   # Deep product DNA
+    elif product_stints >= 2:
+        hea *= 1.10
+    elif product_stints >= 1:
+        hea *= 1.0
+    else:
+        hea *= 0.80   # No product company experience at all
 
-
-def _location_score(country: str, location: str, willing_relocate: bool) -> float:
-    """Score based on proximity to Pune/Noida and relocation willingness."""
-    country_l = country.lower()
-    loc_l = location.lower()
-
-    if country_l != "india":
-        return 0.1
-
-    target_cities = ("pune", "noida")
-    secondary_cities = ("hyderabad", "mumbai", "gurgaon", "delhi",
-                        "ncr", "ghaziabad", "faridabad", "bangalore")
-
-    if any(c in loc_l for c in target_cities):
-        return 1.0
-    if any(c in loc_l for c in secondary_cities):
-        return 0.8
-    if willing_relocate:
-        return 0.7
-    return 0.3
-
-
-def _availability_modifier(signals: dict) -> float:
-    """Multiplicative modifier based on 23 Redrob behavioral signals."""
-
-    # 1. Recency of activity
-    last_active_str = signals.get("last_active_date")
-    active_f = 0.1
-    if last_active_str:
+    # ── 7. Active recency ─────────────────────────────────────────────
+    last_active = signals.get("last_active_date")
+    if last_active:
         try:
-            last_dt = datetime.strptime(last_active_str, "%Y-%m-%d")
+            last_dt = datetime.strptime(last_active, "%Y-%m-%d")
             days_inactive = (REF_DATE - last_dt).days
             if days_inactive <= 30:
-                active_f = 1.0
+                hea *= 1.05   # Very recently active
             elif days_inactive <= 90:
-                active_f = 0.9
+                hea *= 1.0
             elif days_inactive <= 180:
-                active_f = 0.5
+                hea *= 0.70
             else:
-                active_f = 0.1
+                hea *= 0.30   # Ghost profile
         except (ValueError, TypeError):
             pass
 
-    # 2. Notice period
+    # ── 8. Notice period ──────────────────────────────────────────────
     notice = signals.get("notice_period_days", 180)
     if notice <= 30:
-        notice_f = 1.0
+        hea *= 1.05
     elif notice <= 60:
-        notice_f = 0.9
+        hea *= 1.0
     elif notice <= 90:
-        notice_f = 0.7
+        hea *= 0.90
     else:
-        notice_f = 0.4
+        hea *= 0.80
 
-    # 3. Recruiter responsiveness
+    # ── 9. Recruiter responsiveness (continuous) ───────────────────────
+    # Continuous: maps 0.0→0.50, 0.5→0.875, 1.0→1.10
     resp = signals.get("recruiter_response_rate", 0.0)
-    resp_f = 0.3 + 0.7 * resp
+    hea *= 0.50 + 0.60 * resp
 
-    # 4. Interview completion
+    # ── 10. Interview completion (continuous) ──────────────────────────
+    # Continuous: maps 0.0→0.60, 0.5→0.825, 1.0→1.05
     int_rate = signals.get("interview_completion_rate", 0.0)
-    int_f = 0.4 + 0.6 * int_rate
+    hea *= 0.60 + 0.45 * int_rate
 
-    # 5. Open-to-work flag
-    otw = signals.get("open_to_work_flag", False)
-    otw_f = 1.0 if otw else 0.8
+    # ── 11. Open to work ──────────────────────────────────────────────
+    if signals.get("open_to_work_flag", False):
+        hea *= 1.05
 
-    # 6. Profile completeness bonus (mild)
+    # ── 12. Profile completeness ──────────────────────────────────────
     completeness = signals.get("profile_completeness_score", 50.0)
-    comp_f = 0.8 + 0.2 * (completeness / 100.0)
+    hea *= 0.85 + 0.15 * (completeness / 100.0)
 
-    # 7. GitHub activity bonus (mild)
-    gh = signals.get("github_activity_score", -1)
-    gh_f = 1.0 if gh < 0 else (0.9 + 0.1 * min(1.0, gh / 80.0))
+    # ── 13. Location (India preferred, Pune/Noida ideal) ──────────────
+    country = profile.get("country", "").lower()
+    location = profile.get("location", "").lower()
+    willing = signals.get("willing_to_relocate", False)
 
-    return active_f * notice_f * resp_f * int_f * otw_f * comp_f * gh_f
-
-
-def score_candidate(candidate: dict, honeypot_ids: set[str], cos_score: float = 0.0, bm25_score: float = 0.0) -> tuple[float, dict]:
-    """Return (final_score, debug_info) for a single candidate.
-
-    Returns (0.0, {}) for hard-filtered candidates.
-    """
-    cid = candidate.get("candidate_id", "")
-
-    # ── Hard filters ──────────────────────────────────────────────────
-    if cid in honeypot_ids:
-        return 0.0, {}
-
-    profile = candidate.get("profile", {})
-    career  = candidate.get("career_history", [])
-    skills  = candidate.get("skills", [])
-    signals = candidate.get("redrob_signals", {})
-
-    # Service-only career → disqualify
-    companies = {j.get("company") for j in career if j.get("company")}
-    if companies and all(c in SERVICE_COMPANIES for c in companies):
-        return 0.0, {}
-
-    # Current title is completely unrelated → disqualify
-    curr_title = profile.get("current_title", "").lower().strip()
-    if curr_title in UNRELATED_TITLES:
-        return 0.0, {}
-
-    # ── Component scores ──────────────────────────────────────────────
-    career_titles = [j.get("title", "") for j in career]
-    t_score = _title_score(profile.get("current_title", ""), career_titles)
-    e_score = _experience_score(profile.get("years_of_experience", 0))
-    s_score, _, _ = _skills_score(skills)
-    d_score = _description_score(
-        profile.get("summary", ""),
-        [j.get("description", "") for j in career],
-    )
-    l_score = _location_score(
-        profile.get("country", ""),
-        profile.get("location", ""),
-        signals.get("willing_to_relocate", False),
-    )
-
-    # Weighted match score (heuristics)
-    heuristic = (
-        t_score * 0.25
-        + e_score * 0.20
-        + s_score * 0.35
-        + d_score * 0.15
-        + l_score * 0.05
-    )
-
-    avail = _availability_modifier(signals)
-    
-    # Fallback to heuristic * avail if no cosine/BM25 scores are provided
-    if cos_score == 0.0 and bm25_score == 0.0:
-        final = heuristic * avail
+    if country == "india":
+        if any(c in location for c in ("pune", "noida")):
+            hea *= 1.10   # Target city
+        elif any(c in location for c in ("bangalore", "hyderabad", "mumbai",
+                                          "delhi", "gurgaon", "ncr", "ghaziabad")):
+            hea *= 1.05   # Nearby Indian city
+        elif willing:
+            hea *= 1.0    # Willing to relocate within India
+        else:
+            hea *= 0.90   # India but remote city, not willing to relocate
     else:
-        final = (
-            0.30 * cos_score
-            + 0.25 * bm25_score
-            + 0.25 * heuristic
-            + 0.20 * avail
-        )
+        hea *= 0.70   # Non-India penalty
 
-    debug = {
-        "title": t_score, "exp": e_score, "skills": s_score,
-        "desc": d_score, "loc": l_score, "heuristic": heuristic,
-        "avail": avail, "cosine": cos_score, "bm25": bm25_score, "final": final,
-    }
-    return final, debug
+    # ── 14. The Authenticity Check ────────────────────────────────────
+    # Cross-reference: non-technical title with SOTA AI skills → fraud signal
+    # (Already hard-filtered in main, but add a penalty for borderline cases)
+    curr_title_lower = profile.get("current_title", "").lower()
+    if any(kw in curr_title_lower for kw in UNRELATED_TITLE_KEYWORDS):
+        # Check if they have ANY career history in tech
+        career_titles_text = " ".join(j.get("title", "") for j in career).lower()
+        has_any_tech = any(
+            kw in career_titles_text
+            for kw in ("engineer", "developer", "scientist", "ml", "ai", "data")
+        )
+        if not has_any_tech:
+            hea *= 0.10   # Almost certainly a fake AI profile
+
+    # Clamp to [0.2, 3.0] — wider range for granularity at the top
+    return max(0.2, min(3.0, hea))
+
+
+# ╔═══════════════════════════════════════════════════════════════════════╗
+# ║                   SINGULARITY SCORE                                  ║
+# ╚═══════════════════════════════════════════════════════════════════════╝
+
+def compute_singularity_score(atd: float, hea: float) -> float:
+    """Final Score = (ATD ^ 1.5) × HEA
+
+    The exponent creates a non-linear gap:
+        ATD=1.0 (Level 4) → 1.000
+        ATD=0.7 (Level 3) → 0.586
+        ATD=0.4 (Level 2) → 0.253
+        ATD=0.15 (Level 1) → 0.058
+
+    This means a Level 4 candidate is ~17× more valuable than a Level 1
+    candidate before HEA multiplier kicks in.
+    """
+    return (atd ** 1.5) * hea
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
@@ -460,8 +514,12 @@ def _hash_idx(cid: str, n: int) -> int:
     return int(hashlib.md5(cid.encode()).hexdigest(), 16) % n
 
 
-def generate_reasoning(candidate: dict, rank: int) -> str:
-    """Produce a factual, non-templated 1-2 sentence reasoning string."""
+def generate_reasoning(candidate: dict, rank: int, atd: float, hea: float) -> str:
+    """Produce a factual, non-templated 1-2 sentence reasoning string.
+
+    References specific facts from the candidate's profile and connects
+    to JD requirements.  Uses hash-based variation for non-identical output.
+    """
     prof    = candidate.get("profile", {})
     signals = candidate.get("redrob_signals", {})
     skills  = [s.get("name", "") for s in candidate.get("skills", [])]
@@ -474,72 +532,91 @@ def generate_reasoning(candidate: dict, rank: int) -> str:
     loc     = prof.get("location", "")
     notice  = signals.get("notice_period_days", 0)
     resp    = signals.get("recruiter_response_rate", 0.0)
+    gh      = signals.get("github_activity_score", -1)
 
     idx = _hash_idx(cid, 5)
 
-    # ── Sentence 1: Intro + alignment ─────────────────────────────────
+    # Identify matched skills by category for specificity
+    matched_ir = [s for s in skills if s.lower() in CORE_IR_SKILLS][:3]
+    matched_l3 = [s for s in skills if ATD_TAXONOMY.get(s.lower(), 0) >= 3][:4]
+    matched_l4 = [s for s in skills if ATD_TAXONOMY.get(s.lower(), 0) == 4][:3]
+
+    # Determine ATD level label
+    if atd >= 0.85:
+        atd_label = "Level 4 (core infra/distributed)"
+    elif atd >= 0.55:
+        atd_label = "Level 3 (applied SOTA)"
+    elif atd >= 0.30:
+        atd_label = "Level 2 (standard ML)"
+    else:
+        atd_label = "Level 1 (wrapper-level)"
+
+    # ── Sentence 1: Why they're ranked here ───────────────────────────
     if rank <= 10:
         intros = [
-            f"Exceptional fit with {years:.1f} years as a {title} at {company}, directly aligned with the founding AI engineering mandate.",
-            f"Top-tier candidate — {years:.1f} years of applied experience as a {title} at {company}, matching the core search/ranking charter.",
-            f"Strong founding-team candidate: {years:.1f} years building production ML systems as a {title} at {company}.",
-            f"Premier match for the Senior AI Engineer role with {years:.1f} years at {company} as a {title}.",
-            f"Ideal profile: {years:.1f} years of hands-on ML engineering experience as a {title} at {company}.",
+            f"Exceptional founding-team fit: {years:.1f} years as a {title} at {company}, with {atd_label} technical depth directly aligned with the ranking/retrieval mandate.",
+            f"Top-tier candidate — {years:.1f} years building production ML systems as a {title} at {company}, demonstrating {atd_label} mastery of the search/ranking stack.",
+            f"Premier match for the Senior AI Engineer (Founding Team) role: {years:.1f} years at {company} as a {title}, with deep expertise in retrieval and ranking infrastructure.",
+            f"Ideal founding-engineer profile: {years:.1f} years of hands-on ML engineering as a {title} at {company}, hitting {atd_label} on the AI depth scale.",
+            f"Strong founding-team candidate: {years:.1f} years at {company} as a {title}, with proven {atd_label} technical floor and high execution agency.",
         ]
     elif rank <= 30:
         intros = [
-            f"Solid candidate with {years:.1f} years of experience as a {title} at {company}, well-suited for the ranking/retrieval charter.",
-            f"Strong alignment: {years:.1f} years of product-engineering experience as a {title} at {company}.",
-            f"Compelling profile with {years:.1f} years as a {title} at {company}, demonstrating applied ML depth.",
-            f"Well-qualified candidate — {years:.1f} years at {company} as a {title}, covering key JD requirements.",
-            f"Relevant fit with {years:.1f} years building ML-powered features as a {title} at {company}.",
+            f"Solid candidate with {years:.1f} years as a {title} at {company}, demonstrating {atd_label} AI depth relevant to the hybrid search charter.",
+            f"Strong alignment: {years:.1f} years of product-engineering experience as a {title} at {company}, with {atd_label} technical breadth.",
+            f"Compelling profile with {years:.1f} years as a {title} at {company}, covering key JD requirements at {atd_label}.",
+            f"Well-qualified — {years:.1f} years at {company} as a {title}, with applied ML depth at {atd_label} and strong engagement signals.",
+            f"Relevant fit: {years:.1f} years building ML features as a {title} at {company}, scoring {atd_label} on technical taxonomy.",
         ]
     elif rank <= 70:
         intros = [
-            f"Good candidate with {years:.1f} years of experience as a {title} at {company}.",
-            f"Matches key criteria: {years:.1f} years as a {title} at {company} with relevant engineering depth.",
-            f"Moderate fit — {years:.1f} years at {company} as a {title}, covering several JD skill areas.",
-            f"Brings {years:.1f} years of experience as a {title} at {company} with partial alignment to the JD.",
-            f"Reasonable match with {years:.1f} years of tenure as a {title} at {company}.",
+            f"Good candidate with {years:.1f} years as a {title} at {company}, reaching {atd_label} on the technical taxonomy.",
+            f"Matches several JD criteria: {years:.1f} years as a {title} at {company} with {atd_label} AI skills coverage.",
+            f"Moderate fit — {years:.1f} years at {company} as a {title}, covering partial JD requirements at {atd_label}.",
+            f"Brings {years:.1f} years of experience as a {title} at {company} with {atd_label} technical alignment.",
+            f"Reasonable match: {years:.1f} years at {company} as a {title}, with {atd_label} AI skills and acceptable engagement.",
         ]
     else:
         intros = [
-            f"Borderline fit with {years:.1f} years as a {title} at {company}; included based on adjacent signals.",
-            f"Adjacent candidate: {years:.1f} years at {company} as a {title}, weaker on some core JD dimensions.",
-            f"Lower-confidence match — {years:.1f} years as a {title} at {company}, but gaps in key areas.",
-            f"Marginal fit at {years:.1f} years of experience as a {title} at {company}.",
-            f"Included at rank boundary: {years:.1f} years as a {title} at {company} with partial overlap to requirements.",
+            f"Borderline fit with {years:.1f} years as a {title} at {company}; {atd_label} technical depth limits ranking.",
+            f"Adjacent candidate: {years:.1f} years at {company} as a {title}, with {atd_label} skills — weaker on core JD dimensions.",
+            f"Lower-confidence match — {years:.1f} years as a {title} at {company}, {atd_label} with gaps in key retrieval/ranking areas.",
+            f"Marginal fit at {years:.1f} years as a {title} at {company}, reaching only {atd_label} on the technical taxonomy.",
+            f"Included at rank boundary: {years:.1f} years at {company} as a {title}, {atd_label} with partial overlap to the founding-team requirements.",
         ]
 
     s1 = intros[idx]
 
-    # ── Sentence 2: Skills + concerns ─────────────────────────────────
-    matched_core = [s for s in skills if s.lower() in CORE_IR_SKILLS]
-    matched_adv  = [s for s in skills if s.lower() in ADVANCED_ML_SKILLS]
-
-    if matched_core:
-        top_skills = matched_core[:3]
+    # ── Sentence 2: Skills evidence + concerns ────────────────────────
+    if matched_l4:
         skill_phrases = [
-            f"Production experience with {', '.join(top_skills)} aligns with the vector-retrieval stack.",
-            f"Hands-on with {', '.join(top_skills)}, directly relevant to the hybrid search mandate.",
-            f"Key strengths in {', '.join(top_skills)} match the IR/ranking infrastructure needs.",
-            f"Demonstrated depth in {', '.join(top_skills)}, critical for the retrieval layer.",
-            f"Core skill alignment through {', '.join(top_skills)} experience in production settings.",
+            f"Core infrastructure expertise in {', '.join(matched_l4)} positions them for the distributed training and serving mandate.",
+            f"Hands-on with {', '.join(matched_l4)}, directly addressing the custom ML infra needs of the founding team.",
+            f"Key strengths in {', '.join(matched_l4)} match the deep technical depth requirement.",
+            f"Demonstrated mastery of {', '.join(matched_l4)}, critical for the inference and serving layer.",
+            f"Production experience with {', '.join(matched_l4)} aligns with the scaling infrastructure needs.",
         ]
-    elif matched_adv:
-        top_skills = matched_adv[:3]
+    elif matched_ir:
         skill_phrases = [
-            f"Relevant ML toolkit ({', '.join(top_skills)}) supports the applied AI requirements.",
-            f"Background in {', '.join(top_skills)} provides a solid foundation for the role.",
-            f"Applied ML skills in {', '.join(top_skills)} cover secondary JD requirements.",
-            f"Proficiency in {', '.join(top_skills)} bridges toward the search/ranking domain.",
-            f"Has {', '.join(top_skills)} experience applicable to the ML infrastructure layer.",
+            f"Production experience with {', '.join(matched_ir)} aligns with the vector-retrieval and ranking stack.",
+            f"Hands-on with {', '.join(matched_ir)}, directly relevant to the hybrid search and ranking mandate.",
+            f"Key strengths in {', '.join(matched_ir)} match the IR/ranking infrastructure needs.",
+            f"Demonstrated depth in {', '.join(matched_ir)}, critical for the retrieval and evaluation layer.",
+            f"Core skill alignment through {', '.join(matched_ir)} in production settings.",
+        ]
+    elif matched_l3:
+        skill_phrases = [
+            f"Applied ML toolkit ({', '.join(matched_l3)}) supports the AI engineering requirements.",
+            f"Background in {', '.join(matched_l3)} provides a solid foundation for the role.",
+            f"Skills in {', '.join(matched_l3)} cover secondary JD requirements for fine-tuning and evaluation.",
+            f"Proficiency in {', '.join(matched_l3)} bridges toward the search/ranking domain.",
+            f"Has {', '.join(matched_l3)} experience applicable to the ML infrastructure layer.",
         ]
     else:
         skill_phrases = [
             "Skills profile is adjacent rather than directly aligned with core IR/vector requirements.",
             "Limited direct overlap with the vector search and ranking evaluation stack.",
-            "Skill set is general engineering; would need ramp-up on retrieval-specific tooling.",
+            "Skill set covers general engineering but would need ramp-up on retrieval-specific tooling.",
             "Engineering fundamentals are present but specific search/NLP depth is thin.",
             "Core JD skills (embeddings, vector DBs, ranking eval) are under-represented in the profile.",
         ]
@@ -552,6 +629,8 @@ def generate_reasoning(candidate: dict, rank: int) -> str:
         concerns.append(f"{notice}-day notice period")
     if resp < 0.5:
         concerns.append(f"{int(resp * 100)}% recruiter response rate")
+    if gh >= 0 and gh < 10:
+        concerns.append(f"low GitHub activity ({gh:.0f}/100)")
 
     target_locs = ("pune", "noida", "gurgaon", "delhi", "hyderabad",
                    "mumbai", "bangalore")
@@ -580,11 +659,7 @@ def generate_reasoning(candidate: dict, rank: int) -> str:
 # ║                           MAIN PIPELINE                             ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
-# Paths for precomputed embeddings and reasoning cache (relative to script folder)
 DIR_PATH = os.path.dirname(os.path.abspath(__file__))
-EMB_PATH = os.path.join(DIR_PATH, "candidate_embeddings.npy")
-JD_EMB_PATH = os.path.join(DIR_PATH, "jd_embedding.npy")
-IDS_PATH = os.path.join(DIR_PATH, "candidate_ids.json")
 REASONING_CACHE_PATH = os.path.join(DIR_PATH, "reasoning_cache.json")
 
 
@@ -598,78 +673,6 @@ def load_honeypots(path: str) -> set[str]:
     return set(data.keys())
 
 
-def load_precomputed_embeddings():
-    """Load pre-computed candidate and JD embeddings if they exist."""
-    if os.path.exists(EMB_PATH) and os.path.exists(JD_EMB_PATH) and os.path.exists(IDS_PATH):
-        print(f"Loading precomputed embeddings from {EMB_PATH}...")
-        cand_embs = np.load(EMB_PATH)
-        jd_emb = np.load(JD_EMB_PATH)
-        with open(IDS_PATH, "r", encoding="utf-8") as fh:
-            cand_ids = json.load(fh)
-        
-        id_to_idx = {cid: idx for idx, cid in enumerate(cand_ids)}
-        return cand_embs, jd_emb, id_to_idx
-    else:
-        print("WARNING: Precomputed embeddings not found. Will fall back to on-the-fly embedding.")
-        return None, None, None
-
-
-def get_cosine_scores(candidates: list[dict], cand_embs, jd_emb, id_to_idx) -> dict:
-    """Get semantic cosine similarity scores. Computes on-the-fly if missing from cache."""
-    scores = {}
-    if cand_embs is not None and jd_emb is not None and id_to_idx is not None:
-        # cand_embs are pre-normalized, jd_emb is pre-normalized, dot product is cosine similarity
-        sims = np.dot(cand_embs, jd_emb.T).flatten()
-        for cid, idx in id_to_idx.items():
-            scores[cid] = float(sims[idx])
-
-    # Check for candidates not in cache (fallback)
-    missing = [c for c in candidates if c.get("candidate_id") not in scores]
-    if missing:
-        print(f"Computing embeddings on-the-fly for {len(missing)} candidates...")
-        model = get_sentence_transformer_model()
-        texts = [build_candidate_text(c) for c in missing]
-        
-        # Encode missing texts
-        missing_embs = model.encode(texts, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
-        
-        # Cache JD embedding locally
-        if "jd_emb" not in _MODEL_CACHE:
-            _MODEL_CACHE["jd_emb"] = model.encode([JD_TEXT], convert_to_numpy=True, normalize_embeddings=True)
-        jd_emb_local = _MODEL_CACHE["jd_emb"]
-        
-        sims_missing = np.dot(missing_embs, jd_emb_local.T).flatten()
-        for c, sim in zip(missing, sims_missing):
-            scores[c["candidate_id"]] = float(sim)
-
-    return scores
-
-
-def get_bm25_scores(candidates: list[dict]) -> dict:
-    """Tokenize and compute BM25 scores for candidates against the JD query."""
-    if not candidates:
-        return {}
-    
-    corpus = [build_candidate_text(c) for c in candidates]
-    tokenized_corpus = [tokenize(doc) for doc in corpus]
-    
-    bm25 = BM25Okapi(tokenized_corpus)
-    jd_query = tokenize(JD_TEXT)
-    raw_scores = bm25.get_scores(jd_query)
-    
-    max_score = max(raw_scores) if len(raw_scores) > 0 else 0.0
-    
-    scores = {}
-    for idx, c in enumerate(candidates):
-        cid = c["candidate_id"]
-        if max_score > 0.0:
-            scores[cid] = float(raw_scores[idx] / max_score)
-        else:
-            scores[cid] = 0.0
-            
-    return scores
-
-
 def load_reasoning_cache() -> dict:
     """Load reasoning cache JSON file if it exists."""
     if os.path.exists(REASONING_CACHE_PATH):
@@ -681,7 +684,8 @@ def load_reasoning_cache() -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Rank candidates for the Redrob Senior AI Engineer role."
+        description="Rank candidates for the Redrob Senior AI Engineer role "
+                    "using the Singularity Engine (ATD × HEA)."
     )
     parser.add_argument(
         "--candidates",
@@ -702,6 +706,11 @@ def main() -> None:
 
     t0 = time.time()
 
+    print("=" * 60)
+    print("  THE SINGULARITY ENGINE — Redrob MatchWise v2")
+    print("  Score = (ATD ^ 1.5) × HEA")
+    print("=" * 60)
+
     # Resolve candidates path
     cpath = args.candidates
     if not os.path.exists(cpath):
@@ -716,10 +725,19 @@ def main() -> None:
     honeypot_ids = load_honeypots(args.honeypots)
     print(f"Loaded {len(honeypot_ids)} honeypot IDs.")
 
-    # Read and hard-filter candidates
-    print(f"Reading candidates from: {cpath}")
-    valid_candidates = []
+    # Load reasoning cache
+    reasoning_cache = load_reasoning_cache()
+    if reasoning_cache:
+        print(f"Loaded {len(reasoning_cache)} cached reasoning entries.")
+
+    # ── Stream, filter, and score candidates ──────────────────────────
+    print(f"\nStreaming candidates from: {cpath}")
+    scored = []
     total = 0
+    filtered_honeypot = 0
+    filtered_service = 0
+    filtered_title = 0
+    filtered_atd = 0
 
     opener = gzip.open if cpath.endswith(".gz") else open
     with opener(cpath, "rt", encoding="utf-8") as fh:
@@ -729,67 +747,72 @@ def main() -> None:
                 continue
             cand = json.loads(line)
             total += 1
-            
+
             cid = cand.get("candidate_id", "")
+
+            # ── Hard filter 1: Honeypots ──
             if cid in honeypot_ids:
+                filtered_honeypot += 1
                 continue
-                
+
             profile = cand.get("profile", {})
-            career = cand.get("career_history", [])
-            
-            # Service-only career -> disqualify
+            career  = cand.get("career_history", [])
+            skills  = cand.get("skills", [])
+
+            # ── Hard filter 2: Service-only career ──
             companies = {j.get("company") for j in career if j.get("company")}
             if companies and all(c in SERVICE_COMPANIES for c in companies):
+                filtered_service += 1
                 continue
-                
-            # Current title is completely unrelated -> disqualify
+
+            # ── Hard filter 3: Unrelated current title with no tech history ──
             curr_title = profile.get("current_title", "").lower().strip()
             if curr_title in UNRELATED_TITLES:
+                # Check if career history has ANY technical role
+                career_titles_text = " ".join(
+                    j.get("title", "") for j in career
+                ).lower()
+                has_tech_history = any(
+                    kw in career_titles_text
+                    for kw in ("engineer", "developer", "scientist", "ml",
+                               "ai", "data", "research")
+                )
+                if not has_tech_history:
+                    filtered_title += 1
+                    continue
+
+            # ── Compute scores ──
+            atd = compute_atd(skills, career)
+            hea = compute_hea(cand)
+
+            # ── Soft filter: ATD too low (pure Level 1 / no AI skills) ──
+            if atd < 0.10:
+                filtered_atd += 1
                 continue
-                
-            valid_candidates.append(cand)
 
-    print(f"Read {total} candidates. {len(valid_candidates)} passed hard filters.")
-
-    # Load precomputed embeddings
-    cand_embs, jd_emb, id_to_idx = load_precomputed_embeddings()
-
-    # Compute BM25 scores
-    print("Computing BM25 scores...")
-    bm25_scores = get_bm25_scores(valid_candidates)
-
-    # Compute cosine similarities
-    print("Computing cosine similarities...")
-    cos_scores = get_cosine_scores(valid_candidates, cand_embs, jd_emb, id_to_idx)
-
-    # Load reasoning cache
-    reasoning_cache = load_reasoning_cache()
-
-    # Score all candidates using hybrid formula
-    print("Scoring candidates...")
-    scored = []
-    for cand in valid_candidates:
-        cid = cand["candidate_id"]
-        cos_val = cos_scores.get(cid, 0.0)
-        bm25_val = bm25_scores.get(cid, 0.0)
-        score, debug = score_candidate(cand, honeypot_ids, cos_score=cos_val, bm25_score=bm25_val)
-        scored.append((cid, score, cand))
+            score = compute_singularity_score(atd, hea)
+            scored.append((cid, score, cand, atd, hea))
 
     t_score = time.time()
-    print(f"Processed and scored candidates in {t_score - t0:.1f}s.")
+    print(f"\nProcessed {total} candidates in {t_score - t0:.1f}s.")
+    print(f"  Honeypots filtered: {filtered_honeypot}")
+    print(f"  Service-only filtered: {filtered_service}")
+    print(f"  Unrelated title filtered: {filtered_title}")
+    print(f"  Low ATD filtered: {filtered_atd}")
+    print(f"  Viable candidates scored: {len(scored)}")
 
-    # Sort: score descending, candidate_id ascending for tiebreaks
+    # ── Sort: score descending, candidate_id ascending for tiebreaks ──
     scored.sort(key=lambda x: (-x[1], x[0]))
 
-    # Take top 100
+    # ── Take top 100 ──────────────────────────────────────────────────
     top_100 = scored[:100]
 
-    # Generate output
+    # ── Generate output ───────────────────────────────────────────────
     rows = []
-    for rank_idx, (cid, score, cand) in enumerate(top_100, start=1):
+    for rank_idx, (cid, score, cand, atd, hea) in enumerate(top_100, start=1):
         reasoning = reasoning_cache.get(cid, "")
         if not reasoning:
-            reasoning = generate_reasoning(cand, rank_idx)
+            reasoning = generate_reasoning(cand, rank_idx, atd, hea)
         rows.append({
             "candidate_id": cid,
             "rank": rank_idx,
@@ -797,7 +820,7 @@ def main() -> None:
             "reasoning": reasoning,
         })
 
-    # Write CSV
+    # ── Write CSV ─────────────────────────────────────────────────────
     with open(args.out, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(
             fh,
@@ -810,25 +833,51 @@ def main() -> None:
     t_end = time.time()
     total_time = t_end - t0
 
-    print(f"\n{'='*60}")
+    # ── Summary ───────────────────────────────────────────────────────
+    print(f"\n{'=' * 60}")
     print(f"Submission written to: {args.out}")
     print(f"Top 100 candidates ranked. Score range: "
           f"{rows[0]['score']:.6f} -> {rows[-1]['score']:.6f}")
     print(f"Total runtime: {total_time:.1f}s")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
-    # Sanity checks
+    # ── Top-10 snapshot ───────────────────────────────────────────────
+    print("\nTop-10 Snapshot:")
+    print(f"{'Rank':>4}  {'Score':>8}  {'ATD':>5}  {'HEA':>5}  {'Title':<35}  {'Company':<25}")
+    print("-" * 90)
+    for rank_idx, (cid, score, cand, atd, hea) in enumerate(top_100[:10], start=1):
+        p = cand.get("profile", {})
+        print(f"{rank_idx:>4}  {score:>8.4f}  {atd:>5.3f}  {hea:>5.3f}  "
+              f"{p.get('current_title', ''):<35.35}  {p.get('current_company', ''):<25.25}")
+
+    # ── Sanity checks ─────────────────────────────────────────────────
     ids_in_output = {r["candidate_id"] for r in rows}
     honeypots_in_output = ids_in_output & honeypot_ids
     if honeypots_in_output:
-        print(f"WARNING: {len(honeypots_in_output)} honeypots in output!")
+        print(f"\nWARNING: {len(honeypots_in_output)} honeypots in output!")
     else:
-        print("OK: Zero honeypots in top 100.")
+        print("\nOK: Zero honeypots in top 100.")
 
     if total_time > 300:
         print(f"WARNING: Runtime {total_time:.0f}s exceeds 5-minute limit!")
     else:
         print(f"OK: Runtime {total_time:.1f}s is within 5-minute budget.")
+
+    # Check for keyword-trap profiles in top 10
+    trap_titles = {"marketing manager", "hr manager", "accountant",
+                   "graphic designer", "content writer", "sales executive",
+                   "mechanical engineer", "civil engineer", "project manager",
+                   "operations manager", "customer support"}
+    trap_count = sum(
+        1 for _, _, cand, _, _ in top_100[:10]
+        if cand.get("profile", {}).get("current_title", "").lower().strip()
+        in trap_titles
+    )
+    if trap_count > 0:
+        print(f"WARNING: {trap_count}/10 top candidates have non-tech titles "
+              f"(possible keyword-trap profiles).")
+    else:
+        print("OK: Top-10 has zero non-tech title candidates (keyword trap avoided).")
 
 
 if __name__ == "__main__":
