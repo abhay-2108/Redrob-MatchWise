@@ -34,17 +34,18 @@ from rank import (
     SERVICE_COMPANIES,
     UNRELATED_TITLES,
     CORE_IR_SKILLS,
+    CV_SPEECH_SKILLS,
     ATD_TAXONOMY,
 )
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                          PAGE CONFIG                                ║
+# ║                          PAGE CONFIG                                  ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
-@st.cache_resource
+# Removed cache_resource to force live re-generation of reasoning text
 def get_cached_reasoning():
-    return load_reasoning_cache()
+    return {}
 
 st.set_page_config(
     page_title="Redrob MatchWise",
@@ -156,6 +157,37 @@ st.markdown("""
         border-left: 3px solid rgba(139, 92, 246, 0.4);
     }
 
+    .hidden-gem-tag {
+        display: inline-block;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        font-weight: 700;
+        font-size: 0.8rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 6px;
+        margin-right: 0.4rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .caveat-tag {
+        color: #ef4444;
+        font-weight: 600;
+        font-size: 0.85rem;
+        background: rgba(239, 68, 68, 0.1);
+        padding: 0.1rem 0.3rem;
+        border-radius: 4px;
+    }
+
+    .highlight-tag {
+        color: #10b981;
+        font-weight: 600;
+        font-size: 0.85rem;
+        background: rgba(16, 185, 129, 0.1);
+        padding: 0.1rem 0.3rem;
+        border-radius: 4px;
+    }
+
     /* Sidebar styling */
     [data-testid="stSidebar"] {
         background: rgba(15, 15, 35, 0.95);
@@ -169,7 +201,7 @@ st.markdown("""
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                           SIDEBAR                                  ║
+# ║                           SIDEBAR                                     ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 with st.sidebar:
@@ -202,6 +234,8 @@ with st.sidebar:
                           help="Importance of recent platform activity vs inactive ghost profiles.")
     w_notice = st.slider("Notice Period Weight", 0.0, 2.0, 1.0, 0.1,
                          help="Importance of short notice periods (<=30 days).")
+    w_domain = st.slider("Domain Match Bonus", 1.0, 1.5, 1.15, 0.05,
+                         help="Multiplier for experience in HR-Tech, Recruitment, or Marketplaces.")
     
     custom_weights = {
         "title": w_title,
@@ -212,6 +246,7 @@ with st.sidebar:
         "product": w_product,
         "recency": w_recency,
         "notice": w_notice,
+        "domain": w_domain
     }
     
     st.markdown("---")
@@ -219,7 +254,7 @@ with st.sidebar:
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                          MAIN APP                                  ║
+# ║                          MAIN APP                                     ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 st.markdown('<p class="main-header">Redrob MatchWise</p>', unsafe_allow_html=True)
@@ -309,11 +344,46 @@ if uploaded is not None:
                 continue
 
             hea = compute_hea(cand, custom_weights)
-            score = compute_singularity_score(atd, hea)
-            scored.append((cid, score, cand, atd, hea))
+            
+            if hea <= 0.0:
+                continue
 
-        scored.sort(key=lambda x: (-x[1], x[0]))
-        top = scored[:100]
+            # ── Hard filter: The "LangChain Tourist" Bypass ──
+            max_lvl = max([ATD_TAXONOMY.get(s.get("name", "").lower().strip(), 0) for s in skills] + [0])
+            max_ml_months = max([s.get("duration_months", 0) for s in skills if ATD_TAXONOMY.get(s.get("name", "").lower().strip(), 0) >= 1] + [0])
+            if max_lvl == 1 and max_ml_months < 12:
+                continue
+
+            score = compute_singularity_score(atd, hea)
+            scored.append({'cid': cid, 'score': score, 'cand': cand, 'atd': atd, 'hea': hea})
+
+        # Find 100th score threshold for standard candidates
+        scored.sort(key=lambda x: (-x['score'], x['cid']))
+        threshold_score = scored[99]['score'] if len(scored) > 100 else 0.0
+
+        standard_candidates = []
+        hidden_gems = []
+        
+        for idx, cand_obj in enumerate(scored):
+            # Check hidden gem criteria
+            if cand_obj['hea'] >= 1.0 and cand_obj['atd'] < 1.0:
+                hidden_gems.append(cand_obj)
+            else:
+                standard_candidates.append(cand_obj)
+                
+        # Sort hidden gems by HEA descending to find the absolute best athletes
+        hidden_gems.sort(key=lambda x: -x['hea'])
+                
+        final_top = []
+        quota = 100 - min(len(hidden_gems), 10)
+        final_top.extend(standard_candidates[:quota])
+        final_top.extend(hidden_gems[:10])
+        
+        # Sort combined top 100 by final score
+        final_top.sort(key=lambda x: (-x['score'], x['cid']))
+        
+        # Convert back to tuple expected by Streamlit rendering logic
+        top = [(c['cid'], c['score'], c['cand'], c['atd'], c['hea']) for c in final_top[:100]]
 
     t_end = time.time()
     runtime = t_end - t0
@@ -410,6 +480,26 @@ if uploaded is not None:
         for s in sota_matched[:5]:
             skill_chips += f'<span class="skill-chip">{s}</span>'
 
+        # Apply rich HTML formatting to the reasoning text
+        display_reasoning = reasoning
+        if "[Hidden Gem 💎]" in display_reasoning:
+            display_reasoning = display_reasoning.replace(
+                "[Hidden Gem 💎]", 
+                "<span class='hidden-gem-tag'>💎 Hidden Gem</span>"
+            )
+        
+        for kw in ["Note:", "Caveat:", "Consideration:", "Flag:", "Potential concern:"]:
+            if kw in display_reasoning:
+                display_reasoning = display_reasoning.replace(
+                    kw, f"<span class='caveat-tag'>{kw}</span>"
+                )
+                
+        for kw in ["Highlight:", "Key Strength:", "Bonus:"]:
+            if kw in display_reasoning:
+                display_reasoning = display_reasoning.replace(
+                    kw, f"<span class='highlight-tag'>{kw}</span>"
+                )
+
         st.markdown(f"""
         <div class="candidate-card">
             <div>
@@ -424,7 +514,7 @@ if uploaded is not None:
                 &nbsp;·&nbsp; {prof.get('location', '')}
             </div>
             <div style="margin-top: 0.4rem;">{skill_chips}</div>
-            <div class="reasoning-text">{reasoning}</div>
+            <div class="reasoning-text">{display_reasoning}</div>
         </div>
         """, unsafe_allow_html=True)
 

@@ -62,9 +62,11 @@ Place the candidate pool file inside the `docs/` directory:
 
 ---
 
-## 4. Pre-computation (Offline Steps)
+## 4. Pre-computation (Offline, Local Development Only)
 
-Before running the ranker, you must generate the honeypot list and can optionally pre-compute the high-quality LLM reasoning cache for the top candidates. These steps run offline (once) and do not count toward the 5-minute sandbox budget.
+**Note for Hackathon Deployment (Hugging Face Spaces):** You do *not* need to run these steps in your sandbox, nor do you need to upload the massive 100K `candidates.jsonl` file to your codebase! We have already executed these steps locally and included the resulting files (like `honeypots.json`) in the repository. The judges will use the Streamlit UI's File Uploader to test their own candidate files.
+
+Before running the ranker locally for the first time, you must generate the honeypot list and can optionally pre-compute the high-quality LLM reasoning cache for the top candidates. These steps run offline (once) and do not count toward the 5-minute sandbox budget.
 
 ### Step 4.1: Identify Honeypots & Anomalies
 Scans profiles for tenure contradictions or impossible credentials:

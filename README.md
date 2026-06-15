@@ -19,7 +19,9 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 2. Pre-computation (Offline, One-Time)
+### 2. Pre-computation (Offline, Local Development Only)
+**Note to Judges/Reviewers:** You *do not* need to run these steps. We have already run them locally to generate the necessary assets (`honeypots.json`, etc.) which are included in this repository. You also *do not* need to upload or commit the massive `candidates.jsonl` file to the codebase!
+
 These offline preparation steps generate metadata and LLM-written reasoning caches before the main sandbox ranking runs:
 
 - **Generate the honeypot filter list:**
@@ -32,12 +34,14 @@ These offline preparation steps generate metadata and LLM-written reasoning cach
   python precompute_reasoning.py --mode gemini --top-n 500
   ```
 
-### 3. Run the Sandbox Ranker
-Executes the main ranking script (pure Python standard library math at runtime):
+### 3. Run the Sandbox Ranker (Hackathon Stage 3 Reproduction)
+The single command to reproduce `submission.csv` from the 100K candidates file:
 ```bash
-python rank.py --candidates ./docs/candidates.jsonl --out ./submission.csv
+python rank.py --candidates ./candidates.jsonl --out ./submission.csv
 ```
-**Runtime:** ~80 seconds on CPU | **Memory:** ~200 MB | **Dependencies:** Pure Python standard library.
+*(Note: If testing locally with our sample, the candidates file is located at `./docs/candidates.jsonl`)*
+
+**Runtime:** ~15 seconds on CPU | **Memory:** ~200 MB | **Dependencies:** Pure Python standard library (No API calls, no network required).
 
 ### 4. Validate the Submission
 Verify that the output is formatted correctly and complies with the challenge specifications:
@@ -90,7 +94,13 @@ A continuous multiplicative modifier mapping 14 career structure and behavioral 
 * **Product DNA:** Penalizes pure outsourcing/consulting company histories and rewards product experience.
 * **GitHub & Engagement Signals:** Continuous functions for GitHub activity, interview completion rates, and recruiter response rates.
 
-### 3. Integrated Fraud Scanners
+### 3. Hybrid Quota Ranking & Hidden Gems 💎
+The system enforces a **Hybrid Quota** approach for the top 100 results:
+- **Top 90 spots** are strictly reserved for the highest absolute scores (typically Level 4 ATD).
+- **Up to 10 spots** are reserved for "Hidden Gems" — candidates with extremely high Execution Agency ($HEA \ge 1.25$) but slightly lower technical depth ($ATD < 1.0$). 
+This ensures the final output includes highly-driven, fast-learning "athletes" who might lack the most elite AI framework credentials but possess undeniable startup hustle and shipping DNA.
+
+### 4. Integrated Fraud Scanners
 - **Timeline Overlapping Check:** Detects and penalizes resumes with overlapping full-time stint dates (simultaneous stints > 90 days).
 - **Buzzword Stuffing Penalty:** Penalizes profiles with an unnaturally high skill count relative to their total experience.
 - **Title Inflation Detector:** Flags profiles claiming senior leadership titles (VP, Lead, Principal, Chief) with under 4 years of total experience.

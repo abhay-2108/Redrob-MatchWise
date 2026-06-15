@@ -58,7 +58,7 @@ from datetime import datetime
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                        CONSTANTS & CONFIG                           ║
+# ║                        CONSTANTS & CONFIG                             ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 REF_DATE = datetime(2026, 6, 14)
@@ -130,19 +130,23 @@ UNRELATED_TITLES = frozenset({
     "financial analyst", "legal counsel",
 })
 
-# Also check career titles for unrelated roles
-UNRELATED_TITLE_KEYWORDS = frozenset({
-    "marketing", "accountant", "accounting", "operations manager",
-    "graphic design", "mechanical", "civil engineer", "project manager",
-    "customer support", "hr manager", "human resources",
-    "sales executive", "sales manager", "content writer",
-    "ux designer", "ui designer", "recruiter", "financial analyst",
-    "legal counsel", "lawyer",
+# CV / Speech / Robotics flags
+CV_SPEECH_KEYWORDS = frozenset({
+    "computer vision", "opencv", "yolo", "resnet", "image processing",
+    "object detection", "image segmentation", "speech recognition",
+    "asr", "speech-to-text", "robotics", "ros", "slam", "lidar"
 })
+
+EVAL_KEYWORDS = frozenset({
+    "ndcg", "mrr", "map", "a/b test", "ab test", "a/b testing",
+    "offline-to-online", "evaluation", "eval", "metrics"
+})
+
+# Also check career titles for unrelated roles
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║              ATD — ABSOLUTE TECHNICAL DOMINANCE TAXONOMY             ║
+# ║              ATD — ABSOLUTE TECHNICAL DOMINANCE TAXONOMY              ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 #
 # Hierarchical taxonomy: skill name (lowercase) → ATD level (1-4).
@@ -167,8 +171,8 @@ ATD_TAXONOMY: dict[str, int] = {
     "faiss": 3, "pinecone": 3, "weaviate": 3, "qdrant": 3, "milvus": 3,
     "opensearch": 3, "elasticsearch": 3, "pgvector": 3, "chromadb": 3,
     "vector database": 3, "vector search": 3, "semantic search": 3,
-    "information retrieval": 3, "bm25": 3,
-    "embeddings": 3, "ndcg": 3, "mrr": 3, "map": 3,
+    "information retrieval": 3, "bm25": 3, "bge": 3, "e5": 3, "openai embeddings": 3,
+    "embeddings": 3, "ndcg": 3, "mrr": 3, "map": 3, "offline-to-online correlation": 3, "offline to online": 3,
     "huggingface": 3, "transformers": 3,
     "mlflow": 3, "mlops": 3, "ray": 3,
     "haystack": 3, "a/b testing": 3, "ab testing": 3,
@@ -177,7 +181,7 @@ ATD_TAXONOMY: dict[str, int] = {
     "pytorch": 2, "tensorflow": 2, "deep learning": 2,
     "machine learning": 2, "scikit-learn": 2,
     "rag": 2, "retrieval-augmented generation": 2,
-    "nlp": 2, "llamaindex": 2,
+    "nlp": 2, "llamaindex": 2, "python": 2,
     "keras": 2, "spacy": 2, "nltk": 2,
 
     # ── Level 1: The Wrappers (API callers, tutorial-level) ──
@@ -195,7 +199,7 @@ ATD_DESC_KEYWORDS: dict[str, int] = {
     "recommendation system": 3, "ranking system": 3, "search system": 3,
     "vector search": 3, "hybrid search": 3, "semantic search": 3,
     "embeddings": 3, "retrieval system": 3, "re-ranking": 3, "reranking": 3,
-    "ndcg": 3, "information retrieval": 3, "learning to rank": 3,
+    "ndcg": 3, "information retrieval": 3, "learning to rank": 3, "offline-to-online correlation": 3,
     "a/b test": 3, "ab test": 3,
     "faiss": 3, "pinecone": 3, "weaviate": 3, "qdrant": 3,
     "milvus": 3, "elasticsearch": 3, "opensearch": 3,
@@ -226,6 +230,12 @@ PRODUCT_INDUSTRIES = frozenset({
     "telecommunications", "biotechnology", "robotics",
 })
 
+# Domain experience explicitly requested
+HR_TECH_INDUSTRIES = frozenset({
+    "hr tech", "hr-tech", "recruiting", "recruitment", "human resources",
+    "talent acquisition", "marketplace", "marketplaces", "hiring",
+})
+
 # CV/Speech-only skills — penalty if these dominate without NLP/IR
 CV_SPEECH_SKILLS = frozenset({
     "computer vision", "image classification", "object detection",
@@ -249,7 +259,7 @@ PROF_MULTIPLIER = {"beginner": 0.5, "intermediate": 0.75, "advanced": 1.0, "expe
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                   ATD SCORING (AXIS A)                               ║
+# ║                   ATD SCORING (AXIS A)                                ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 def canonicalize_skill(skill_name: str) -> str:
@@ -362,19 +372,11 @@ def compute_atd(skills: list[dict], career: list[dict]) -> float:
     # This ensures candidates at the same level are differentiated by depth
     granularity = min(0.20, weighted_depth * 0.008)
 
-    # CV/Speech-only penalty: if they have no IR/NLP but lots of CV skills
-    skill_names_lower = {s.get("name", "").lower().strip() for s in skills}
-    has_ir = bool(skill_names_lower & CORE_IR_SKILLS)
-    has_cv_only = bool(skill_names_lower & CV_SPEECH_SKILLS)
-    cv_penalty = 0.0
-    if has_cv_only and not has_ir:
-        cv_penalty = -0.15  # Significant penalty per JD: "pure CV/speech without NLP/IR"
-
-    return min(1.0, max(0.0, base + breadth_bonus + depth_bonus + granularity + cv_penalty))
+    return min(1.0, max(0.0, base + breadth_bonus + depth_bonus + granularity))
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                   HEA SCORING (AXIS B)                               ║
+# ║                   HEA SCORING (AXIS B)                                ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 def compute_hea(candidate: dict, weights: dict = None) -> float:
@@ -406,6 +408,7 @@ def compute_hea(candidate: dict, weights: dict = None) -> float:
     w_open_to_work = w.get("open_to_work", 1.05)
     w_location_india = w.get("location_india", 0.70)
     w_location_city = w.get("location_city", 1.10)
+    w_domain = w.get("domain", 1.15)
 
     hea = 1.0  # Start neutral
 
@@ -487,16 +490,18 @@ def compute_hea(candidate: dict, weights: dict = None) -> float:
     # ── 8. Notice period (continuous sigmoid decay) ───────────────────
     notice = signals.get("notice_period_days", 180)
     # Smooth sigmoid mapping notice <= 30 -> ~1.02, notice > 90 -> ~0.75
-    notice_factor = 0.75 + 0.30 / (1.0 + math.exp((notice - 70) / 20.0))
+    notice_factor = 0.75 + 0.30 / (1.0 + math.exp((notice - 60) / 10.0))
     hea *= 1.0 + (notice_factor - 1.0) * w_notice
 
     # ── 9. Recruiter responsiveness (continuous) ───────────────────────
-    resp = signals.get("recruiter_response_rate", 0.0)
-    hea *= 0.50 + w_responsiveness * resp
-
+    if "recruiter_response_rate" in signals:
+        resp = signals["recruiter_response_rate"]
+        hea *= 0.80 + w_responsiveness * resp * 0.40
+        
     # ── 10. Interview completion (continuous) ──────────────────────────
-    int_rate = signals.get("interview_completion_rate", 0.0)
-    hea *= 0.60 + w_interview * int_rate
+    if "interview_completion_rate" in signals:
+        int_rate = signals["interview_completion_rate"]
+        hea *= 0.85 + w_interview * int_rate * 0.30
 
     # ── 11. Open to work ──────────────────────────────────────────────
     if signals.get("open_to_work_flag", False):
@@ -520,7 +525,7 @@ def compute_hea(candidate: dict, weights: dict = None) -> float:
         elif willing:
             hea *= 1.0    # Willing to relocate within India
         else:
-            hea *= 0.90   # India but remote city, not willing to relocate
+            return 0.0    # HARD FILTER: India but remote city, not willing to relocate
     else:
         hea *= w_location_india
 
@@ -546,7 +551,7 @@ def compute_hea(candidate: dict, weights: dict = None) -> float:
                 has_timeline_clash = True
                 break
     if has_timeline_clash:
-        hea *= 0.40  # Severe penalty for fake overlapping timeline
+        return 0.0  # HARD FILTER: Severe penalty for fake overlapping timeline
 
     # B. Buzzword Stuffing (extremely high skill count relative to experience)
     if years > 0 and len(skills) / years > 6.0:
@@ -560,8 +565,31 @@ def compute_hea(candidate: dict, weights: dict = None) -> float:
     if is_inflated and years < 4.0:
         hea *= 0.50  # Severe title inflation penalty
 
+    # D. The True Title-Chaser (Job Hopper)
+    if len(career) > 0 and (years / len(career)) < 1.8 and is_inflated:
+        hea *= 0.30
+
+    # E. Non-Coding Architects
+    is_architect = any(kw in curr_title_lower for kw in ("architect", "lead", "head"))
+    if is_architect and gh <= 5:
+        hea *= 0.20
+
+    # F. Proprietary Systems Without Validation
+    if years >= 5.0 and gh == 0:
+        hea *= 0.40
+
+    # G. The "4-5 Years in Applied ML" Blindspot
+    max_ml_months = 0
+    for s in skills:
+        sname = s.get("name", "").lower().strip()
+        lvl = ATD_TAXONOMY.get(sname, 0)
+        dur = s.get("duration_months", 0)
+        if lvl >= 2 and dur > max_ml_months:
+            max_ml_months = dur
+    if max_ml_months < 12 and years >= 5.0:
+        hea *= 0.85
     # D. Legacy Unrelated Title without Tech History
-    if any(kw in curr_title_lower for kw in UNRELATED_TITLE_KEYWORDS):
+    if any(kw in curr_title_lower for kw in UNRELATED_TITLES):
         career_titles_text = " ".join(j.get("title", "") for j in career).lower()
         has_any_tech = any(
             kw in career_titles_text
@@ -570,12 +598,69 @@ def compute_hea(candidate: dict, weights: dict = None) -> float:
         if not has_any_tech:
             hea *= 0.10   # Fake AI profile penalty
 
-    # Clamp to [0.2, 3.0] — wider range for granularity at the top
+    # ── 15. Domain Experience (HR-Tech / Marketplace) ─────────────────
+    career_texts = " ".join(j.get("industry", "") + " " + j.get("description", "") for j in career).lower()
+    if any(kw in career_texts for kw in HR_TECH_INDUSTRIES):
+        hea *= w_domain
+
+    # ── 16. Open Source Contribution Signal ───────────────────────────
+    if "open source" in career_texts or "open-source" in career_texts:
+        hea *= 1.05
+
+    # ── 17. The Python Mandate ────────────────────────────────────────
+    has_python = any(s.get("name", "").lower().strip() == "python" for s in skills) or ("python" in career_texts)
+    if not has_python and years >= 3.0:
+        hea *= 0.70  # Explicit JD requirement: "Strong Python."
+
+    # ── 18. Shipper > Researcher Tilt ─────────────────────────────────
+    is_pure_researcher = curr_title_lower in ("research scientist", "researcher", "applied scientist")
+    if is_pure_researcher and devops_count == 0 and backend_count == 0:
+        hea *= 0.85  # JD: "tilt slightly toward shipper than toward researcher"
+
+    # ── 19. The True LangChain Tourist ────────────────────────────────
+    # Max ML duration < 12 months, but has L1 skills and NO L3/L4 skills
+    l1_count = sum(1 for s in skills if ATD_TAXONOMY.get(s.get("name", "").lower().strip(), 0) == 1)
+    l34_count = sum(1 for s in skills if ATD_TAXONOMY.get(s.get("name", "").lower().strip(), 0) >= 3)
+    if l1_count > 0 and l34_count == 0 and max_ml_months < 12:
+        hea *= 0.10  # JD: "recent (under 12 months) projects using LangChain to call OpenAI"
+
+    # ── 20. The "Ghost" Candidate (Inactive + Low Response) ───────────
+    last_active = signals.get("last_active_date")
+    if last_active:
+        try:
+            last_dt = datetime.strptime(last_active, "%Y-%m-%d")
+            days_inactive = (REF_DATE - last_dt).days
+            if days_inactive > 180 and resp <= 0.05:
+                hea *= 0.10  # Explicit JD disqualifier: "not actually available"
+        except (ValueError, TypeError):
+            pass
+
+    # I. The Evaluation Framework Gap
+    has_eval = False
+    for s in skills:
+        if s.get("name", "").lower().strip() in EVAL_KEYWORDS:
+            has_eval = True
+            break
+    if not has_eval:
+        career_desc = " ".join(j.get("description", "") for j in career).lower()
+        if any(kw in career_desc for kw in EVAL_KEYWORDS):
+            has_eval = True
+            
+    if years >= 4.0 and not has_eval:
+        hea *= 0.85  # Moderate penalty for lacking eval skills at senior level
+
+    # J. Primary CV/Speech without NLP/IR
+    skill_names_set = {s.get("name", "").lower().strip() for s in skills}
+    cv_speech_count = len(skill_names_set & CV_SPEECH_KEYWORDS)
+    ir_count = sum(1 for s in skills if ATD_TAXONOMY.get(s.get("name", "").lower().strip(), 0) >= 3)
+    if cv_speech_count >= 2 and ir_count == 0:
+        hea *= 0.70  # Soft penalty: "re-learning fundamentals here"
+
     return max(0.2, min(3.0, hea))
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                   SINGULARITY SCORE                                  ║
+# ║                   SINGULARITY SCORE                                   ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 def compute_singularity_score(atd: float, hea: float) -> float:
@@ -594,7 +679,7 @@ def compute_singularity_score(atd: float, hea: float) -> float:
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                       REASONING GENERATOR                           ║
+# ║                       REASONING GENERATOR                             ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 def _hash_idx(cid: str, n: int) -> int:
@@ -630,11 +715,11 @@ def generate_reasoning(candidate: dict, rank: int, atd: float, hea: float) -> st
     matched_l4 = [s for s in skills if ATD_TAXONOMY.get(s.lower(), 0) == 4][:3]
 
     # Determine ATD level label
-    if atd >= 0.85:
+    if atd >= 0.99:
         atd_label = "Level 4 (core infra/distributed)"
-    elif atd >= 0.55:
+    elif atd >= 0.70:
         atd_label = "Level 3 (applied SOTA)"
-    elif atd >= 0.30:
+    elif atd >= 0.40:
         atd_label = "Level 2 (standard ML)"
     else:
         atd_label = "Level 1 (wrapper-level)"
@@ -642,11 +727,11 @@ def generate_reasoning(candidate: dict, rank: int, atd: float, hea: float) -> st
     # ── Sentence 1: Why they're ranked here ───────────────────────────
     if rank <= 10:
         intros = [
-            f"Exceptional founding-team fit: {years:.1f} years as a {title} at {company}, with {atd_label} technical depth directly aligned with the ranking/retrieval mandate.",
-            f"Top-tier candidate — {years:.1f} years building production ML systems as a {title} at {company}, demonstrating {atd_label} mastery of the search/ranking stack.",
-            f"Premier match for the Senior AI Engineer (Founding Team) role: {years:.1f} years at {company} as a {title}, with deep expertise in retrieval and ranking infrastructure.",
-            f"Ideal founding-engineer profile: {years:.1f} years of hands-on ML engineering as a {title} at {company}, hitting {atd_label} on the AI depth scale.",
-            f"Strong founding-team candidate: {years:.1f} years at {company} as a {title}, with proven {atd_label} technical floor and high execution agency.",
+            f"Exceptional founding-team fit: {years:.1f} years of total experience, currently a {title} at {company}, with {atd_label} technical depth directly aligned with the ranking/retrieval mandate.",
+            f"Top-tier candidate — {years:.1f} years of total experience, building production ML systems as a {title} at {company}, demonstrating {atd_label} mastery of the search/ranking stack.",
+            f"Premier match for the Senior AI Engineer (Founding Team) role: {years:.1f} years of total experience, currently a {title} at {company}, with deep expertise in retrieval and ranking infrastructure.",
+            f"Ideal founding-engineer profile: {years:.1f} years of total experience, hands-on ML engineering as a {title} at {company}, hitting {atd_label} on the AI depth scale.",
+            f"Strong founding-team candidate: {years:.1f} years of total experience, currently a {title} at {company}, with proven {atd_label} technical floor and high execution agency.",
         ]
     elif rank <= 30:
         intros = [
@@ -713,12 +798,48 @@ def generate_reasoning(candidate: dict, rank: int, atd: float, hea: float) -> st
 
     # ── Sentence 3 (optional): Concerns ───────────────────────────────
     concerns = []
+    
+    career_texts = " ".join(j.get("industry", "") + " " + j.get("description", "") + " " + j.get("title", "") for j in career).lower()
+    
+    l1_count = sum(1 for s in skills if ATD_TAXONOMY.get(s.lower(), 0) == 1)
+    l34_count = sum(1 for s in skills if ATD_TAXONOMY.get(s.lower(), 0) >= 3)
+    curr_title_lower = title.lower()
+    is_architect = any(kw in curr_title_lower for kw in ("architect", "lead", "head", "manager"))
+    has_python = any(s.lower() == "python" for s in skills) or ("python" in career_texts)
+
+    # 1. Job Hopper
+    if len(career) > 0 and (years / len(career)) < 1.8:
+        concerns.append("trajectory suggests title-chasing/job-hopping (<1.8 yrs/role)")
+
+    # 2. Architect without coding
+    if is_architect and gh <= 15:
+        concerns.append("moved into architecture/lead role with low recent coding signals")
+        
+    # 3. Langchain Tourist
+    if l1_count > 0 and l34_count == 0:
+        concerns.append("framework enthusiast (heavy on wrappers, light on core ML systems)")
+        
+    # 4. No Python
+    if not has_python and years >= 3.0:
+        concerns.append("missing strong Python signals despite seniority")
+
     if notice > 60:
         concerns.append(f"{notice}-day notice period")
     if resp < 0.5:
         concerns.append(f"{int(resp * 100)}% recruiter response rate")
+        
+    # 5. Closed-source proprietary
     if gh >= 0 and gh < 10:
-        concerns.append(f"low GitHub activity ({gh:.0f}/100)")
+        if years >= 5.0 and "open source" not in career_texts and "open-source" not in career_texts:
+            concerns.append("5+ years of proprietary work without external validation (low GitHub)")
+        else:
+            concerns.append(f"low GitHub activity ({gh:.0f}/100)")
+            
+    # 6. Service company only
+    product_companies = sum(1 for c in career if any(ind in str(c.get("industry", "")).lower() for ind in PRODUCT_INDUSTRIES))
+    if product_companies == 0 and len(career) > 0:
+        if any(any(svc in str(c.get("company", "")).lower() for svc in SERVICE_COMPANIES) for c in career):
+            concerns.append("career exclusively in consulting/services without product background")
 
     target_locs = ("pune", "noida", "gurgaon", "delhi", "hyderabad",
                    "mumbai", "bangalore")
@@ -727,6 +848,75 @@ def generate_reasoning(candidate: dict, rank: int, atd: float, hea: float) -> st
         willing = signals.get("willing_to_relocate", False)
         if not willing:
             concerns.append(f"based in {loc} without relocation willingness")
+
+    # 7. CV/Speech Trap
+    skill_names_set = {s.lower().strip() for s in skills}
+    cv_speech_count = len(skill_names_set & CV_SPEECH_KEYWORDS)
+    ir_count = sum(1 for s in skills if ATD_TAXONOMY.get(s.lower().strip(), 0) >= 3)
+    if cv_speech_count >= 2 and ir_count == 0:
+        concerns.append("primary expertise in CV/Speech/Robotics without significant NLP/IR exposure")
+
+    # 8. Ghost Candidate
+    last_active = signals.get("last_active_date")
+    if last_active:
+        try:
+            last_dt = datetime.strptime(last_active, "%Y-%m-%d")
+            if (REF_DATE - last_dt).days > 180 and resp <= 0.05:
+                concerns.append("highly inactive (>6 mos) with critically low recruiter response (<=5%)")
+        except:
+            pass
+
+    # 9. Evaluation Gap
+    has_eval = False
+    for s in skills:
+        if s.lower().strip() in EVAL_KEYWORDS:
+            has_eval = True
+            break
+    if not has_eval:
+        career_desc = " ".join(j.get("description", "") for j in career).lower()
+        if any(kw in career_desc for kw in EVAL_KEYWORDS):
+            has_eval = True
+    if years >= 4.0 and not has_eval:
+        concerns.append("missing evaluation framework signals (NDCG, MRR, A/B testing) despite seniority")
+
+    # 10. Pure Research without production
+    is_pure_researcher = title.lower() in ("research scientist", "researcher", "applied scientist")
+    has_prod = any(kw in career_texts for kw in ("production", "scale", "deployment", "deployed", "api", "infra"))
+    if is_pure_researcher and not has_prod:
+        concerns.append("research-heavy background with limited production deployment signals")
+
+    # ── Highlights ────────────────────────────────────────────────────
+    highlights = []
+    
+    # 1. Product DNA
+    product_companies = sum(1 for c in career if any(ind in str(c.get("industry", "")).lower() for ind in PRODUCT_INDUSTRIES))
+    if product_companies >= 2:
+        highlights.append("Strong Product DNA")
+        
+    # 2. DevOps / Full-stack Shipper
+    devops_count = len(skill_names_set & DEVOPS_SKILLS)
+    backend_count = len(skill_names_set & BACKEND_SKILLS)
+    if devops_count >= 1 and backend_count >= 1:
+        highlights.append("End-to-End Shipper")
+        
+    # 3. Evaluation Champion
+    if has_eval and years >= 2.0:
+        highlights.append("Evaluation Champion 🥇")
+        
+    # 4. Open Source
+    gh = signals.get("github_activity_score", 0)
+    if gh > 80 or "open source" in career_texts or "open-source" in career_texts:
+        highlights.append("Open Source Builder")
+        
+    if highlights:
+        highlight_strs = [
+            f"Highlight: {', '.join(highlights)}.",
+            f"Key Strength: {', '.join(highlights)}.",
+            f"Bonus: {', '.join(highlights)}.",
+        ]
+        s4 = " " + highlight_strs[idx % 3]
+    else:
+        s4 = ""
 
     if concerns:
         concern_strs = [
@@ -740,11 +930,18 @@ def generate_reasoning(candidate: dict, rank: int, atd: float, hea: float) -> st
     else:
         s3 = ""
 
-    return s1 + " " + s2 + s3
+    res = s1 + " " + s2 + s4 + s3
+    
+    # ── Tag True "Hidden Gems" ────────────────────────────────────────
+    # If the candidate has extremely high HEA but didn't reach ATD Level 4
+    if hea >= 1.0 and atd < 1.0:
+        res = "[Hidden Gem 💎] " + res
+
+    return res
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║                           MAIN PIPELINE                             ║
+# ║                           MAIN PIPELINE                               ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 DIR_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -873,6 +1070,16 @@ def main() -> None:
             atd = compute_atd(skills, career)
             hea = compute_hea(cand)
 
+            if hea <= 0.0:
+                continue
+
+
+            # ── Hard filter: The "LangChain Tourist" Bypass ──
+            max_lvl = max([ATD_TAXONOMY.get(s.get("name", "").lower().strip(), 0) for s in skills] + [0])
+            max_ml_months = max([s.get("duration_months", 0) for s in skills if ATD_TAXONOMY.get(s.get("name", "").lower().strip(), 0) >= 1] + [0])
+            if max_lvl == 1 and max_ml_months < 12:
+                continue
+
             # ── Soft filter: ATD too low (pure Level 1 / no AI skills) ──
             if atd < 0.10:
                 filtered_atd += 1
@@ -892,8 +1099,32 @@ def main() -> None:
     # ── Sort: score descending, candidate_id ascending for tiebreaks ──
     scored.sort(key=lambda x: (-x[1], x[0]))
 
-    # ── Take top 100 ──────────────────────────────────────────────────
-    top_100 = scored[:100]
+    # ── Hybrid Quota Ranking (Best 90 + Up to 10 Hidden Gems) ─────────
+    # We allocate up to 10 spots for "Hidden Gems" (HEA >= 1.0, ATD < 1.0).
+    # We search the entire list to find the 10 best hidden gems, sorted by HEA.
+    hidden_gems = []
+    for item in scored:
+        cid, score, reasoning, atd, hea = item
+        if hea >= 1.0 and atd < 1.0:
+            hidden_gems.append(item)
+            
+    # Sort hidden gems by HEA descending to get the highest execution athletes
+    hidden_gems.sort(key=lambda x: -x[4])
+    top_hidden_gems = hidden_gems[:10]
+    hidden_gem_cids = {item[0] for item in top_hidden_gems}
+    
+    # Fill remaining spots to reach exactly 100
+    top_standard = []
+    quota = 100 - len(top_hidden_gems)
+    for item in scored:
+        if item[0] not in hidden_gem_cids:
+            top_standard.append(item)
+        if len(top_standard) >= quota:
+            break
+            
+    top_100 = top_standard + top_hidden_gems
+    # Sort again so the final 100 output is monotonically descending
+    top_100.sort(key=lambda x: (-x[1], x[0]))
 
     # ── Generate output ───────────────────────────────────────────────
     rows = []
