@@ -5,3 +5,4 @@ honeypots.json
 reasoning_cache.json
 submission_metadata.yaml
 .DS_Store
+docs/candidates_backup.jsonl

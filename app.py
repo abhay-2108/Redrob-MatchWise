@@ -296,66 +296,93 @@ if uploaded is not None:
 
     st.success(f"Loaded **{len(candidates)}** candidate profiles.")
 
-    # Load honeypots
+    # ── Load resources ───────────────────────────────────────────────────
     honeypot_path = os.path.join(os.path.dirname(__file__), "honeypots.json")
     honeypot_ids = load_honeypots(honeypot_path)
+    reasoning_cache = get_cached_reasoning()
 
-    # Score candidates
-    with st.spinner("Scoring and ranking candidates..."):
-        # Load reasoning cache (cached resource)
-        reasoning_cache = get_cached_reasoning()
+    # ── Pre-score and filter all candidates ──────────────────────────────
+    scored = []
+    all_candidates_info = []
 
-        scored = []
-        for cand in candidates:
-            cid = cand.get("candidate_id", "")
-
-            # ── Hard filter 1: Honeypots ──
-            if cid in honeypot_ids:
+    with st.spinner("Analyzing, scoring and ranking profiles..."):
+        for idx, cand in enumerate(candidates):
+            if not cand:
                 continue
+            cid = cand.get("candidate_id", "")
+            profile = cand.get("profile", {}) or {}
+            career  = cand.get("career_history", []) or []
+            skills  = cand.get("skills", []) or []
 
-            profile = cand.get("profile", {})
-            career  = cand.get("career_history", [])
-            skills  = cand.get("skills", [])
+            # ── Check filters ──
+            filters_tripped = []
+            
+            # 1. Honeypot check
+            if cid in honeypot_ids:
+                filters_tripped.append("Honeypot")
 
-            # ── Hard filter 2: Service-only career ──
+            # 2. Service-only check
             companies = {j.get("company") for j in career if j.get("company")}
             if companies and all(c in SERVICE_COMPANIES for c in companies):
-                continue
+                filters_tripped.append("Service-only")
 
-            # ── Hard filter 3: Unrelated current title with no tech history ──
+            # 3. Unrelated title check
             curr_title = profile.get("current_title", "").lower().strip()
             if curr_title in UNRELATED_TITLES:
-                career_titles_text = " ".join(
-                    j.get("title", "") for j in career
-                ).lower()
+                career_titles_text = " ".join(j.get("title", "") for j in career).lower()
                 has_tech_history = any(
                     kw in career_titles_text
                     for kw in ("engineer", "developer", "scientist", "ml",
                                "ai", "data", "research")
                 )
                 if not has_tech_history:
-                    continue
+                    filters_tripped.append("Unrelated Title")
 
-            # ── Compute scores ──
+            # Compute raw scores
             atd = compute_atd(skills, career)
-
-            # ── Soft filter: ATD too low (pure Level 1 / no AI skills) ──
+            
+            # 4. Low ATD check
             if atd < 0.10:
-                continue
+                filters_tripped.append("Low ATD")
 
             hea = compute_hea(cand, custom_weights)
             
+            # 5. Low HEA check
             if hea <= 0.0:
-                continue
+                filters_tripped.append("Low HEA")
 
-            # ── Hard filter: The "LangChain Tourist" Bypass ──
+            # 6. LangChain tourist check
             max_lvl = max([ATD_TAXONOMY.get(s.get("name", "").lower().strip(), 0) for s in skills] + [0])
             max_ml_months = max([s.get("duration_months", 0) for s in skills if ATD_TAXONOMY.get(s.get("name", "").lower().strip(), 0) >= 1] + [0])
             if max_lvl == 1 and max_ml_months < 12:
-                continue
+                filters_tripped.append("LangChain Tourist")
 
+            # Compute final score
             score = compute_singularity_score(atd, hea)
-            scored.append({'cid': cid, 'score': score, 'cand': cand, 'atd': atd, 'hea': hea})
+
+            # Generate reasoning text
+            reasoning = reasoning_cache.get(cid, "")
+            if not reasoning:
+                # We can approximate a rank index (using 1-based index)
+                reasoning = generate_reasoning(cand, idx + 1, atd, hea)
+
+            info = {
+                "cand": cand,
+                "cid": cid,
+                "profile": profile,
+                "skills": skills,
+                "score": score,
+                "atd": atd,
+                "hea": hea,
+                "reasoning": reasoning,
+                "filters_tripped": filters_tripped,
+                "original_index": idx
+            }
+            all_candidates_info.append(info)
+
+            # If passed all filters, append to scored
+            if not filters_tripped:
+                scored.append({'cid': cid, 'score': score, 'cand': cand, 'atd': atd, 'hea': hea})
 
         # Find 100th score threshold for standard candidates
         scored.sort(key=lambda x: (-x['score'], x['cid']))
@@ -387,6 +414,8 @@ if uploaded is not None:
 
     t_end = time.time()
     runtime = t_end - t0
+
+
 
     # ── Metrics row ───────────────────────────────────────────────────
     st.markdown("---")
@@ -518,7 +547,7 @@ if uploaded is not None:
         </div>
         """, unsafe_allow_html=True)
 
-    # ── Download CSV ──────────────────────────────────────────────────
+    # ── Actions Row (Download CSV & Show Candidates Toggle) ───────────
     st.markdown("---")
     output = io.StringIO()
     writer = csv.DictWriter(
@@ -529,12 +558,185 @@ if uploaded is not None:
     writer.writeheader()
     writer.writerows(csv_rows)
 
-    st.download_button(
-        label="📥 Download Ranked CSV",
-        data=output.getvalue(),
-        file_name="submission.csv",
-        mime="text/csv",
-    )
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            label="📥 Download Ranked CSV",
+            data=output.getvalue(),
+            file_name="submission.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    with col2:
+        if "show_uploaded" not in st.session_state:
+            st.session_state.show_uploaded = False
+
+        def toggle_show_uploaded():
+            st.session_state.show_uploaded = not st.session_state.show_uploaded
+
+        st.button(
+            "📋 Show All Uploaded Candidates" if not st.session_state.show_uploaded else "🙈 Hide Uploaded Candidates",
+            on_click=toggle_show_uploaded,
+            key="toggle_uploaded_btn",
+            use_container_width=True,
+        )
+
+    if st.session_state.show_uploaded:
+        st.markdown("---")
+        st.markdown("### 📋 All Uploaded Candidates")
+        
+        # Add search and sorting controls
+        ctrl_col1, ctrl_col2 = st.columns([3, 1])
+        with ctrl_col1:
+            search_query = st.text_input(
+                "🔍 Search loaded candidates",
+                "",
+                key="uploaded_search_all",
+                help="Type to search by name, title, company, skills, or location."
+            )
+        with ctrl_col2:
+            sort_by = st.selectbox(
+                "Sort By",
+                ["Upload Order", "Score (High to Low)"],
+                index=0,
+                key="uploaded_sort_by"
+            )
+
+        # Apply search filter
+        filtered_display = []
+        for item in all_candidates_info:
+            prof = item["profile"] or {}
+            skills_list = item["skills"] or []
+            skills_str = " ".join(s.get("name", "") for s in skills_list if s).lower()
+            text_to_search = f"{item['cid']} {prof.get('anonymized_name', '')} {prof.get('current_title', '')} {prof.get('current_company', '')} {prof.get('location', '')} {prof.get('country', '')} {skills_str}".lower()
+            if not search_query or search_query.lower() in text_to_search:
+                filtered_display.append(item)
+
+        # Apply sort
+        if sort_by == "Score (High to Low)":
+            filtered_display.sort(key=lambda x: (-x["score"], x["cid"]))
+        else:
+            filtered_display.sort(key=lambda x: x["original_index"])
+
+        if not filtered_display:
+            st.warning("No candidates matched your search query.")
+        else:
+            # Reset page to 1 if search query changed
+            if "last_search_query" not in st.session_state:
+                st.session_state.last_search_query = ""
+            if search_query != st.session_state.last_search_query:
+                st.session_state.uploaded_page = 1
+                st.session_state.last_search_query = search_query
+
+            # ── Pagination logic ──
+            items_per_page = 10
+            total_items = len(filtered_display)
+            total_pages = (total_items - 1) // items_per_page + 1
+
+            if "uploaded_page" not in st.session_state:
+                st.session_state.uploaded_page = 1
+
+            if st.session_state.uploaded_page > total_pages:
+                st.session_state.uploaded_page = total_pages
+            if st.session_state.uploaded_page < 1:
+                st.session_state.uploaded_page = 1
+
+            current_page = st.session_state.uploaded_page
+
+            start_idx = (current_page - 1) * items_per_page
+            end_idx = min(start_idx + items_per_page, total_items)
+            page_items = filtered_display[start_idx:end_idx]
+
+            st.info(f"Showing **{start_idx + 1}-{end_idx}** of **{total_items}** candidates (Page {current_page} of {total_pages})")
+
+            # Render cards
+            for item in page_items:
+                cand = item["cand"]
+                cid = item["cid"]
+                prof = item["profile"] or {}
+                score = item["score"]
+                reasoning = item["reasoning"]
+                filters = item["filters_tripped"]
+                skills_list = [s.get("name", "") for s in item["skills"] if s]
+                
+                # Highlight core/SOTA skills
+                core_matched = [s for s in skills_list if s.lower() in CORE_IR_SKILLS]
+                sota_matched = [s for s in skills_list if ATD_TAXONOMY.get(s.lower(), 0) >= 3]
+                
+                # Render skills list
+                all_matched = core_matched + [s for s in sota_matched if s not in core_matched]
+                other_skills = [s for s in skills_list if s not in all_matched]
+                display_skills = all_matched + other_skills
+                
+                skill_chips = ""
+                for s in display_skills[:12]:
+                    if s.lower() in CORE_IR_SKILLS:
+                        skill_chips += f'<span class="skill-chip" style="border-color: rgba(34,197,94,0.4); color: #4ade80;">{s}</span>'
+                    elif ATD_TAXONOMY.get(s.lower(), 0) >= 3:
+                        skill_chips += f'<span class="skill-chip" style="border-color: rgba(139,92,246,0.4); color: #c4b5fd;">{s}</span>'
+                    else:
+                        skill_chips += f'<span class="skill-chip">{s}</span>'
+
+                # Format reasoning
+                display_reasoning = reasoning
+                if "[Hidden Gem 💎]" in display_reasoning:
+                    display_reasoning = display_reasoning.replace(
+                        "[Hidden Gem 💎]", 
+                        "<span class='hidden-gem-tag'>💎 Hidden Gem</span>"
+                    )
+                
+                for kw in ["Note:", "Caveat:", "Consideration:", "Flag:", "Potential concern:"]:
+                    if kw in display_reasoning:
+                        display_reasoning = display_reasoning.replace(
+                            kw, f"<span class='caveat-tag'>{kw}</span>"
+                        )
+                        
+                for kw in ["Highlight:", "Key Strength:", "Bonus:"]:
+                    if kw in display_reasoning:
+                        display_reasoning = display_reasoning.replace(
+                            kw, f"<span class='highlight-tag'>{kw}</span>"
+                        )
+
+                # Filter status badge
+                status_badge = ""
+                if filters:
+                    reasons_str = ", ".join(filters)
+                    status_badge = f'<span class="caveat-tag" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; margin-left: 0.5rem; padding: 0.15rem 0.4rem; border-radius: 6px;">Filtered: {reasons_str}</span>'
+                else:
+                    status_badge = f'<span class="highlight-tag" style="background: rgba(16, 185, 129, 0.15); color: #10b981; margin-left: 0.5rem; padding: 0.15rem 0.4rem; border-radius: 6px;">Passed Filters</span>'
+
+                st.markdown(f"""
+                <div class="candidate-card">
+                    <div>
+                        <strong style="font-size: 1.05rem;">{prof.get('anonymized_name', cid)}</strong>
+                        &nbsp;&nbsp;
+                        <span class="score-badge">Score: {score:.4f}</span>
+                        {status_badge}
+                    </div>
+                    <div style="margin-top: 0.4rem; color: #94a3b8; font-size: 0.88rem;">
+                        {prof.get('current_title', '')} at {prof.get('current_company', '')}
+                        &nbsp;·&nbsp; {prof.get('years_of_experience', 0.0) or 0.0:.1f} yrs
+                        &nbsp;·&nbsp; {f"{prof.get('location', '') or ''}, {prof.get('country', '') or ''}".strip(", ") or 'N/A'}
+                    </div>
+                    <div style="margin-top: 0.4rem;">{skill_chips}</div>
+                    <div class="reasoning-text">{display_reasoning}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # ── Pagination buttons ──
+            if total_pages > 1:
+                st.markdown("<br>", unsafe_allow_html=True)
+                pag_col1, pag_col2, pag_col3 = st.columns([1, 2, 1])
+                with pag_col1:
+                    if st.button("⬅️ Previous Page", disabled=(current_page == 1), key="prev_page_btn", use_container_width=True):
+                        st.session_state.uploaded_page -= 1
+                        st.rerun()
+                with pag_col2:
+                    st.markdown(f"<p style='text-align: center; font-size: 1rem; margin-top: 0.3rem;'>Page <strong>{current_page}</strong> of <strong>{total_pages}</strong></p>", unsafe_allow_html=True)
+                with pag_col3:
+                    if st.button("Next Page ➡️", disabled=(current_page == total_pages), key="next_page_btn", use_container_width=True):
+                        st.session_state.uploaded_page += 1
+                        st.rerun()
 
 else:
     # Default state with instructions
