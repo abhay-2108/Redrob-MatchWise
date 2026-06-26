@@ -1,5 +1,3 @@
-# Redrob Hackathon — Python Dependencies
-# Ultra-lean: pure Python math, zero ML inference at ranking time.
-# The Singularity Engine uses only the standard library for scoring.
-
-streamlit>=1.30.0
+streamlit==1.49.0
+pandas==2.3.3
+numpy==2.4.4
