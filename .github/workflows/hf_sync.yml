@@ -1,0 +1,19 @@
+name: Sync to Hugging Face Spaces
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Allows manual triggering from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Push to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git push --force https://raj0120:$HF_TOKEN@huggingface.co/spaces/raj0120/redrob-matchwise main
