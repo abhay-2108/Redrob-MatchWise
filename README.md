@@ -1,4 +1,14 @@
+---
+title: Redrob MatchWise
+emoji: 🎯
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+pinned: false
+---
+
 # Redrob MatchWise — Candidate Discovery & Ranking Engine (v2.1)
+
 
 A production-grade, ultra-efficient candidate ranking system for the **Senior AI Engineer (Founding Team)** role at Redrob AI.
 
