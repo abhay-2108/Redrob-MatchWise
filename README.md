@@ -18,20 +18,50 @@ candidates  ──▶  Stage 1: Hard Filter  ──▶  Stage 2: XGBoost + Light
 
 ---
 
+## ⚠️ Before You Start
+
+### Git LFS Required
+Binary model files (`precomputed_features.npz`, `ranker.xgb`, `ranker.lgb`) are stored with **Git LFS**. Clone with:
+
+```bash
+git lfs install
+git lfs pull
+```
+
+Without this, you get pointer files and the pipeline will fail to load models.
+
+### Precomputation Steps (run once offline)
+The pipeline needs pre-built features and trained models. If they're not present or you want to rebuild:
+
+```bash
+# 1. Extract 51 features from candidates (~30 min)
+python build_features.py --candidates <path/to/candidates.jsonl>
+
+# 2. Train XGBoost + LightGBM rankers (~5 min)
+python train_ranker.py
+```
+
+Otherwise, the committed `precomputed_features.npz`, `ranker.xgb`, and `ranker.lgb` are used directly.
+
+---
+
 ## 🚀 Quick Start
 
 ```bash
-# 1. Setup
+# 1. Clone with LFS
+git lfs install && git lfs pull
+
+# 2. Setup
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Run the pipeline (6 seconds)
+# 3. Run the pipeline (6 seconds)
 python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
 
-# 3. Validate
+# 4. Validate
 python docs/validate_submission.py submission.csv
 
-# 4. Launch dashboard
+# 5. Launch dashboard
 streamlit run app.py
 ```
 
@@ -104,6 +134,32 @@ streamlit run app.py    # → http://localhost:8501
 | No network | Required | ✅ |
 | Output rows | 100 | ✅ |
 | Monotonic scores | Required | ✅ |
+
+---
+
+## 🌐 Demo Deployments
+
+| Platform | Link | ML Pipeline? | Notes |
+|----------|------|-------------|-------|
+| **Hugging Face Spaces** | [redrob-matchwise.hf.space](https://huggingface.co/spaces/raj0120/redrob-matchwise) | ✅ Full ML (Docker container) | Must be set to **Container** mode in Space settings (image: `raj0120/redrob-matchwise`) |
+| **Streamlit Cloud** | [redrob-matchwise.streamlit.app](https://redrob-matchwise.streamlit.app/) | ❌ Heuristic-only | Streamlit Cloud does not support Git LFS — model files unavailable. Falls back to `ATD¹·⁵ × HEA` heuristic scoring. |
+
+### Why results differ on Streamlit Cloud vs local
+
+The Streamlit Cloud demo uses **heuristic-only scoring** because model files can't be served through their platform (no LFS support). This gives different rankings than the full ML pipeline run locally. Key differences:
+
+- Heuristic mode ranks by `ATD¹·⁵ × HEA` (technical depth × execution agency)
+- Full ML mode uses 40% XGBoost + 20% FlashRank + 40% Heuristic fusion
+- Local results (`submission.csv`) are the authoritative output for submission
+- The Streamlit Cloud dashboard is a **UI demo** — the real evaluation uses the CLI pipeline
+
+### Running the authoritative pipeline locally
+
+```bash
+# This produces the actual submission output
+python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
+python docs/validate_submission.py submission.csv
+```
 
 ---
 
