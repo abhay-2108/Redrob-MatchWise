@@ -1,24 +1,28 @@
-name: Sync to Hugging Face Spaces
+name: Build & Deploy to HF Spaces
 
 on:
   push:
     branches: [main]
-  workflow_dispatch: # Allows manual triggering from GitHub UI
+  workflow_dispatch:
 
 jobs:
-  sync:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
           lfs: true
-      - name: Push to Hugging Face
+
+      - name: Log in to Hugging Face Container Registry
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: docker login -u raj0120 --password-stdin registry.huggingface.co <<< "$HF_TOKEN"
+
+      - name: Build and push Docker image
         run: |
-          git remote add space https://raj0120:$HF_TOKEN@huggingface.co/spaces/raj0120/redrob-matchwise
-          # Push LFS objects to HF Spaces (supports LFS for binary files)
-          git lfs push --all space
-          # Push git refs (including LFS pointer files)
-          git push --force space main
+          docker build \
+            -t registry.huggingface.co/raj0120/redrob-matchwise:latest \
+            -t registry.huggingface.co/raj0120/redrob-matchwise:${{ github.sha }} \
+            .
+          docker push --all-tags registry.huggingface.co/raj0120/redrob-matchwise
