@@ -265,20 +265,24 @@ if uploaded is not None:
     if "fused" not in st.session_state or st.session_state.get("run_pipeline", False):
         t_start = time.time()
 
-        # Load Models
+        # Load Models (graceful fallback if missing)
         with st.spinner("Stage 0: Loading ML Models..."):
             honeypot_path = os.path.join(PROJECT_DIR, "honeypots.json")
             honeypot_ids = load_honeypots(honeypot_path)
             
             model_path = os.path.join(PROJECT_DIR, "ranker.xgb")
-            if not os.path.exists(model_path):
-                st.error(f"XGBoost model not found at {model_path}. Please train it first.")
-                st.stop()
-                
-            import xgboost as xgb
-            xgb_model = xgb.XGBRanker()
-            xgb_model.load_model(model_path)
-            lgb_model = load_lightgbm_model(os.path.join(PROJECT_DIR, "ranker.lgb"))
+            lgb_path = os.path.join(PROJECT_DIR, "ranker.lgb")
+            xgb_model = None
+            lgb_model = None
+            
+            if os.path.exists(model_path) and os.path.exists(lgb_path):
+                import xgboost as xgb
+                xgb_model = xgb.XGBRanker()
+                xgb_model.load_model(model_path)
+                lgb_model = load_lightgbm_model(lgb_path)
+                st.info("✅ ML models loaded")
+            else:
+                st.warning("⚠️ ML models (ranker.xgb/lgb) not found — using heuristic-only scoring")
                 
         # ── STAGE 1: Hard Filters ──
         with st.spinner("Stage 1: Applying Hard Filters..."):
@@ -287,12 +291,16 @@ if uploaded is not None:
             viable_features = feature_matrix[viable_mask]
             num_viable = len(viable_indices)
 
-        # ── STAGE 2: XGBoost Scoring ──
-        with st.spinner("Stage 2: XGBoost/LightGBM Ensemble Scoring..."):
+        # ── STAGE 2: Score candidates ──
+        with st.spinner("Stage 2: Scoring Candidates..."):
             if num_viable > 0:
-                xgb_raw_scores = xgb_model.predict(viable_features)
-                lgb_raw_scores = lgb_model.predict(viable_features) if lgb_model is not None else None
-                ranker_scores = ensemble_model_scores(xgb_raw_scores, lgb_raw_scores)
+                if xgb_model is not None:
+                    xgb_raw_scores = xgb_model.predict(viable_features)
+                    lgb_raw_scores = lgb_model.predict(viable_features) if lgb_model is not None else None
+                    ranker_scores = ensemble_model_scores(xgb_raw_scores, lgb_raw_scores)
+                else:
+                    # Heuristic-only fallback: use singularity score (ATD^1.5 × HEA)
+                    ranker_scores = viable_features[:, IDX_SINGULARITY]
                 top_k_positions = np.argsort(ranker_scores)[::-1][:top_k_xgb]
                 top_indices = viable_indices[top_k_positions]
                 top_xgb_scores = ranker_scores[top_k_positions]
@@ -393,15 +401,18 @@ if uploaded is not None:
                     fused = interleaved
                 else:
                     fused.sort(key=lambda x: (-x["score"], x["cid"]))
+                    source = "Heuristic" if xgb_model is None else "Model_B"
                     for item in fused:
-                        item["model_source"] = "Model_B"
+                        item["model_source"] = source
         t_end = time.time()
         st.session_state['fused'] = fused
         st.session_state['runtime'] = t_end - t_start
         st.session_state['run_pipeline'] = False
+        st.session_state['model_mode'] = "Heuristic" if xgb_model is None else "ML"
 
     fused = st.session_state['fused']
     runtime = st.session_state['runtime']
+    model_mode = st.session_state.get('model_mode', 'ML')
 
 
     # ── Tabs ──
@@ -409,6 +420,9 @@ if uploaded is not None:
     
     with tab_search:
         # 1. Global KPI Ribbon
+        # Show which mode is active
+        mode_tag = "🧪 Heuristic-Only Mode" if model_mode == "Heuristic" else "🤖 Full ML Pipeline"
+        st.markdown(f"<span style='background:#334155;padding:4px 14px;border-radius:20px;font-size:0.85rem;'>{mode_tag}</span>", unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
         with kpi1:
