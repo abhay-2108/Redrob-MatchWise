@@ -2,14 +2,14 @@
 """
 build_features.py — Offline Feature Engineering
 =================================================
-Reads all candidates from candidates.jsonl and extracts ~40 numerical
+Reads all candidates from a JSONL file and extracts ~40 numerical
 features per candidate into a compressed numpy matrix.
 
 This runs OFFLINE before submission (no time limit).
-The output `precomputed_features.npz` is loaded at runtime by rank.py.
+The output `precomputed_features.npz` is loaded at runtime by rank_v2.py.
 
 Usage:
-    python build_features.py --candidates ./docs/candidates.jsonl
+    python build_features.py --candidates <path/to/candidates.jsonl>
 """
 
 import argparse
@@ -452,9 +452,9 @@ def extract_features(cand: dict) -> np.ndarray:
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 def main():
-    parser = argparse.ArgumentParser(description="Build feature matrix from candidates.jsonl")
-    parser.add_argument("--candidates", default="./docs/candidates.jsonl",
-                        help="Path to candidates.jsonl or .jsonl.gz")
+    parser = argparse.ArgumentParser(description="Build feature matrix from candidate data")
+    parser.add_argument("--candidates", default="./candidates.jsonl",
+                        help="Path to candidates JSONL file (.jsonl or .jsonl.gz)")
     parser.add_argument("--out", default="./precomputed_features.npz",
                         help="Output path for the feature matrix")
     args = parser.parse_args()

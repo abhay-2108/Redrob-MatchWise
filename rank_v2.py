@@ -13,11 +13,11 @@ Architecture (runs in < 60 seconds on CPU):
   Stage 4: Score fusion + reasoning generation + CSV output
 
 Prerequisites (offline, no time limit):
-  1. python build_features.py --candidates ./docs/candidates.jsonl
+  1. python build_features.py --candidates <path/to/candidates.jsonl>
   2. python train_ranker.py
 
 Usage:
-  python rank_v2.py --candidates ./docs/candidates.jsonl --out ./submission.csv
+  python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
 """
 
 import argparse
@@ -483,8 +483,8 @@ def main():
                     "(XGBoost LambdaMART + FlashRank Cross-Encoder)"
     )
     parser.add_argument(
-        "--candidates", default="./docs/candidates.jsonl",
-        help="Path to candidates.jsonl or .jsonl.gz",
+        "--candidates", default="./candidates.jsonl",
+        help="Path to candidates JSONL file (.jsonl or .jsonl.gz)",
     )
     parser.add_argument(
         "--out", default="./submission.csv",
@@ -523,7 +523,7 @@ def main():
     # Verify prerequisites
     if not os.path.exists(args.features):
         print(f"\nERROR: Feature file not found at {args.features}")
-        print("Run this first:  python build_features.py --candidates ./docs/candidates.jsonl")
+        print("Run this first:  python build_features.py --candidates <path/to/candidates.jsonl>")
         sys.exit(1)
     if not os.path.exists(args.model):
         print(f"\nERROR: Model file not found at {args.model}")

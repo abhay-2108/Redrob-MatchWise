@@ -18,7 +18,6 @@ streamlit_*.txt
 
 # --- Docs: reference files & generated stuff ---
 docs/
-!docs/candidates.jsonl
 !docs/job_description.txt
 !docs/sample_submission.csv
 !docs/submission_spec.txt

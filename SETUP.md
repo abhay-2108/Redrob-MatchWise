@@ -17,7 +17,7 @@ pip install -r requirements.txt
 ## 2. Reproduce Submission
 
 ```bash
-python rank_v2.py --candidates ./candidates.jsonl --out ./submission.csv
+python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
 ```
 
 ⏱️ ~6 seconds on CPU.
@@ -39,7 +39,7 @@ streamlit run app.py
 ## Offline Rebuild (only if needed)
 
 ```bash
-python build_features.py --candidates ./candidates.jsonl   # ~30 min
+python build_features.py --candidates <path/to/candidates.jsonl>   # ~30 min
 python train_ranker.py                                      # ~5 min
 ```
 

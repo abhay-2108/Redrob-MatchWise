@@ -26,7 +26,7 @@ github_repo: "https://github.com/abhay-2108/Redrob-MatchWise"
 
 sandbox_link: "https://redrob-matchwise.streamlit.app/"
 
-reproduce_command: "python rank_v2.py --candidates ./candidates.jsonl --out ./submission.csv"
+reproduce_command: "python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv"
 
 # ============================================================================
 # Compute environment

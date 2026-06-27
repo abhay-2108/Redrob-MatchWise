@@ -26,7 +26,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # 2. Run the pipeline (6 seconds)
-python rank_v2.py --candidates ./candidates.jsonl --out ./submission.csv
+python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
 
 # 3. Validate
 python docs/validate_submission.py submission.csv

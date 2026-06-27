@@ -45,7 +45,7 @@ There are **two modes** depending on what stage you're at.
 If you already have the pre-computed files (`precomputed_features.npz`, `ranker.xgb`, `ranker.lgb`), just run:
 
 ```bash
-python rank_v2.py --candidates ./candidates.jsonl --out ./submission.csv
+python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
 ```
 
 The pipeline loads pre-built artifacts, filters, scores, reranks, and writes the top 100 to `submission.csv`.
@@ -56,13 +56,13 @@ If you need to rebuild the feature matrix and models:
 
 ```bash
 # Step 1 — Extract 51 features for every candidate
-python build_features.py --candidates ./candidates.jsonl
+python build_features.py --candidates <path/to/candidates.jsonl>
 
 # Step 2 — Train XGBoost LambdaMART + LightGBM rankers
 python train_ranker.py
 
 # Step 3 — Run the ranking pipeline
-python rank_v2.py --candidates ./candidates.jsonl --out ./submission.csv
+python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
 ```
 
 ---
@@ -115,5 +115,5 @@ Opens at **[http://localhost:8501](http://localhost:8501)** — explore candidat
 One-liner for the hackathon submission portal:
 
 ```bash
-python rank_v2.py --candidates ./candidates.jsonl --out ./submission.csv
+python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
 ```

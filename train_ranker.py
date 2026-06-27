@@ -499,8 +499,8 @@ def main():
     parser = argparse.ArgumentParser(description="Train XGBoost LambdaMART ranker")
     parser.add_argument("--features", default="./precomputed_features.npz",
                         help="Path to precomputed feature matrix")
-    parser.add_argument("--candidates", default="./docs/candidates.jsonl",
-                        help="Path to candidates.jsonl (for label generation)")
+    parser.add_argument("--candidates", default="./candidates.jsonl",
+                        help="Path to candidates JSONL file (for label generation)")
     parser.add_argument("--model-out", default="./ranker.xgb",
                         help="Output path for the trained model")
     parser.add_argument("--lgb-model-out", default="./ranker.lgb",

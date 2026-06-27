@@ -38,10 +38,7 @@ Constraints (sandbox-enforced at Stage 3)
 
 Usage
 -----
-    python rank.py --candidates ./docs/candidates.jsonl --out ./submission.csv
-
-    # Or with gzipped input:
-    python rank.py --candidates ./candidates.jsonl.gz --out ./submission.csv
+    python rank.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
 """
 
 import argparse
@@ -976,8 +973,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--candidates",
-        default="./docs/candidates.jsonl",
-        help="Path to candidates.jsonl or candidates.jsonl.gz",
+        default="./candidates.jsonl",
+        help="Path to candidates JSONL file (.jsonl or .jsonl.gz)",
     )
     parser.add_argument(
         "--out",
