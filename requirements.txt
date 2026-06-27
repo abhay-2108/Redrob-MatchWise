@@ -1,3 +1,21 @@
-streamlit==1.49.0
-pandas==2.3.3
-numpy==2.4.4
+# Redrob Hackathon — Python Dependencies
+# Multi-Stage Ranking Pipeline: feature engineering + LambdaMART + cross-encoder
+
+# Core UI
+streamlit>=1.30.0
+
+# Feature engineering & ranking
+numpy>=1.24.0
+xgboost>=2.0.0
+lightgbm>=4.0.0
+sentence-transformers>=2.7.0
+
+# Cross-encoder reranking (CPU-optimized, ~4MB model)
+flashrank>=0.2.0
+
+# UI and Data processing
+plotly>=5.18.0
+pandas>=2.0.0
+
+# Evaluation metrics
+# (no extra deps — implemented in pure numpy)

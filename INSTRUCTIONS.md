@@ -1,120 +1,119 @@
-# Redrob MatchWise — Step-by-Step Execution Guide
+# 📋 Redrob MatchWise — Step-by-Step Execution Guide
 
-This guide explains how to set up and run the **Redrob MatchWise** candidate ranking system from scratch on a clean machine.
-
----
-
-## 1. Prerequisites
-Ensure you have Python 3.10+ installed on your system. Using `uv` (a fast Python package installer) is highly recommended, but standard `pip` works perfectly.
+How to set up and run the ranking pipeline from scratch, end to end.
 
 ---
 
-## 2. Setup & Installation
+## 🧰 Prerequisites
 
-### Step 2.1: Clone the Repository
-Clone your project repository and navigate into the root directory:
+| Requirement | Detail |
+|-------------|--------|
+| Python | 3.10+ |
+| RAM | 16 GB (recommended) |
+| Disk | ~500 MB for dataset + models |
+| Network | Only during `pip install` & first model download |
+| GPU | Not needed — runs on CPU |
+
+---
+
+## ⚙️ Setup
+
 ```bash
+# Clone & enter the repo
 git clone https://github.com/abhay-2108/Redrob-MatchWise.git
 cd Redrob-MatchWise
-```
 
-### Step 2.2: Create a Virtual Environment
-Create a clean virtual environment in `.venv/`:
-```bash
-# Using uv (recommended for speed)
-uv venv .venv
-
-# Or using standard python
+# Create virtual environment
 python -m venv .venv
-```
 
-### Step 2.3: Activate the Virtual Environment
-Activate the environment based on your OS:
-* **Windows (PowerShell):**
-  ```powershell
-  .venv\Scripts\Activate.ps1
-  ```
-* **Windows (Command Prompt):**
-  ```cmd
-  .venv\Scripts\activate.bat
-  ```
-* **macOS/Linux:**
-  ```bash
-  source .venv/bin/activate
-  ```
+# Activate it
+#   Windows (PowerShell): .venv\Scripts\Activate.ps1
+#   macOS / Linux:        source .venv/bin/activate
 
-### Step 2.4: Install Dependencies
-Install the required packages from `requirements.txt`:
-```bash
-# Using uv (fast)
-uv pip install -r requirements.txt
-
-# Or using standard pip
+# Install dependencies
 pip install -r requirements.txt
 ```
 
 ---
 
-## 3. Data Preparation
+## 🏃 Running the Pipeline
 
-Place the candidate pool file inside the `docs/` directory:
-* Ensure your candidate dataset is saved at: `docs/candidates.jsonl` (or `docs/candidates.jsonl.gz`).
+There are **two modes** depending on what stage you're at.
+
+### A) Quick Reproduce (5–10 seconds)
+
+If you already have the pre-computed files (`precomputed_features.npz`, `ranker.xgb`, `ranker.lgb`), just run:
+
+```bash
+python rank_v2.py --candidates ./candidates.jsonl --out ./submission.csv
+```
+
+The pipeline loads pre-built artifacts, filters, scores, reranks, and writes the top 100 to `submission.csv`.
+
+### B) Full Rebuild from Scratch (~35 minutes)
+
+If you need to rebuild the feature matrix and models:
+
+```bash
+# Step 1 — Extract 51 features for every candidate
+python build_features.py --candidates ./candidates.jsonl
+
+# Step 2 — Train XGBoost LambdaMART + LightGBM rankers
+python train_ranker.py
+
+# Step 3 — Run the ranking pipeline
+python rank_v2.py --candidates ./candidates.jsonl --out ./submission.csv
+```
 
 ---
 
-## 4. Pre-computation (Offline, Local Development Only)
+## ✅ Validating the Output
 
-**Note for Hackathon Deployment (Hugging Face Spaces):** You do *not* need to run these steps in your sandbox, nor do you need to upload the massive 100K `candidates.jsonl` file to your codebase! We have already executed these steps locally and included the resulting files (like `honeypots.json`) in the repository. The judges will use the Streamlit UI's File Uploader to test their own candidate files.
-
-Before running the ranker locally for the first time, you must generate the honeypot list and can optionally pre-compute the high-quality LLM reasoning cache for the top candidates. These steps run offline (once) and do not count toward the 5-minute sandbox budget.
-
-### Step 4.1: Identify Honeypots & Anomalies
-Scans profiles for tenure contradictions or impossible credentials:
-```bash
-python identify_all_honeypots.py --candidates ./docs/candidates.jsonl --out ./honeypots.json
-```
-*Output: Generates `honeypots.json` (identifies 293 anomalous candidate IDs to be hard-filtered).*
-
-### Step 4.2: Pre-compute LLM Reasoning Cache
-Generates high-quality, factual reasoning strings for the top candidates using Google Gemini API (recommended) or a local model. This cache is saved as `reasoning_cache.json` and read by the ranker during runtime:
-```bash
-# Using Gemini API (requires GEMINI_API_KEY env variable set)
-python precompute_reasoning.py --mode gemini --top-n 500
-
-# Or using a local model (requires installing transformers and torch)
-python precompute_reasoning.py --mode local --top-n 300
-```
-*Output: Generates `reasoning_cache.json` containing detailed, non-templated reasoning explanations.*
-
----
-
-## 5. Running the Ranking Pipeline (Stage 3 Sandbox Entry Point)
-
-Run the main ranker script. This command performs hard filtering (honeypots, service-only careers, unrelated titles), evaluates candidates using the hierarchical AI difficulty taxonomy (ATD) and the 14-signal execution agency multiplier (HEA), resolves tiebreaks continuously, loads the pre-computed reasoning cache (falling back to taxonomy-based generator if missing), and writes the final CSV submission.
-
-```bash
-python rank.py --candidates ./docs/candidates.jsonl --out ./submission.csv
-```
-* **Expected Runtime:** ~20 seconds on CPU.
-* **Output:** Writes the top 100 ranked candidates to `submission.csv`.
-
----
-
-## 6. Validate the Submission Format
-
-Run the hackathon validator script against the output file to ensure full compliance with the submission specifications:
 ```bash
 python docs/validate_submission.py submission.csv
 ```
-* **Expected Output:** `Submission is valid.` (Confirms correct row length, column order, score ordering, tiebreaking, and 0% honeypot presence).
+
+Expected result: `Submission is valid.`
+
+The check ensures:
+- Exactly 100 rows
+- Ranks 1–100 (unique)
+- Scores monotonically non-increasing
+- Correct column names & format
 
 ---
 
-## 7. Launch the Local Streamlit Sandbox Demo
+## 🖥️ Launching the Dashboard
 
-Run the interactive dashboard app to test the ranker using sample uploads (or a custom candidates subset):
 ```bash
 streamlit run app.py
 ```
-* **Access URL:** Opens a local window at `http://localhost:8501`.
-* **Testing:** Drag and drop `docs/sample_candidates.json` to verify live scoring, ranking, and reasoning displays in a premium UI.
+
+Opens at **[http://localhost:8501](http://localhost:8501)** — explore candidates, adjust weights, inspect scores.
+
+---
+
+## 📦 What Each File Does
+
+| File | Role |
+|------|------|
+| `rank_v2.py` | 🏁 Main pipeline — CLI entry point |
+| `app.py` | 🎨 Streamlit web dashboard |
+| `build_features.py` | 🔨 Offline feature engineering |
+| `train_ranker.py` | 🧠 Offline model training |
+| `rank.py` | 📚 Library: taxonomy constants, ATD/HEA |
+| `precomputed_features.npz` | 📐 100K×51 feature matrix (pre-built) |
+| `ranker.xgb` / `ranker.lgb` | 🤖 Trained ranking models |
+| `submission.csv` | 📄 Output: top 100 candidates |
+| `requirements.txt` | 📃 Python dependencies |
+| `docs/validate_submission.py` | ✅ Hackathon format validator |
+
+---
+
+## 🔁 Reproduce Command
+
+One-liner for the hackathon submission portal:
+
+```bash
+python rank_v2.py --candidates ./candidates.jsonl --out ./submission.csv
+```

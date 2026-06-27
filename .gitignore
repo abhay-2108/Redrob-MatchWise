@@ -1,9 +1,42 @@
+# --- Environment ---
 .venv/
 __pycache__/
+*.pyc
+
+# --- Output artifacts (reproducible, not source) ---
 *.csv
+!docs/sample_submission.csv
+!submission.csv
+*.npz
+!precomputed_features.npz
+*.xgb
+!ranker.xgb
+*.lgb
+!ranker.lgb
+*.bak
 honeypots.json
 reasoning_cache.json
-submission_metadata.yaml
-.DS_Store
-docs/candidates_backup.jsonl
+feedback_logs.jsonl
+flashrank_cache/
+temp_*
+streamlit_*.txt
+
+# --- Docs: reference files & generated stuff ---
 docs/
+!docs/candidates.jsonl
+!docs/job_description.txt
+!docs/sample_submission.csv
+!docs/submission_spec.txt
+!docs/validate_submission.py
+Idea Submission Template _ Redrob.pdf
+presentation_deck.md
+job_description.docx
+
+
+# --- OpenWork workspace config ---
+.opencode/
+opencode.jsonc
+
+# --- OS files ---
+.DS_Store
+Thumbs.db

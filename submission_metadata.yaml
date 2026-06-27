@@ -1,18 +1,15 @@
-# Redrob Hackathon — Submission Metadata Template
-#
-# Copy this file to your repo root as `submission_metadata.yaml` and fill it in.
-# The fields here should match what you submit via the portal at upload time.
-# Stage 3 review uses this file to verify your portal metadata.
+# Redrob Hackathon — Submission Metadata
+# Fill this in and keep in sync with your portal submission.
 
 # ============================================================================
 # Team identity
 # ============================================================================
-team_name: "Agent Mania"  # Used in leaderboard and announcements
+team_name: "Agent Mania"
 
 primary_contact:
   name: "Abhay Tiwari"
-  email: "abhaytiwari0821@gmail.com"   # Used for all organizer communication
-  phone: "+91-9959387944"        # Used for top-50 / top-10 outreach
+  email: "abhaytiwari0821@gmail.com"
+  phone: "+91-9959387944"
 
 team_members:
   - name: "Abhay Tiwari"
@@ -26,61 +23,55 @@ team_members:
 # Code and reproducibility
 # ============================================================================
 github_repo: "https://github.com/abhay-2108/Redrob-MatchWise"
-# Required. Must be reachable. Private repos OK if you can grant organizer
-# access at Stage 3 (the email to add will be communicated then).
 
 sandbox_link: "https://redrob-matchwise.streamlit.app/"
-# Required. A working hosted environment where the ranker can be run on a small
-# candidate sample. See Section 10.5 of submission_spec.md for acceptable
-# platforms (HuggingFace Spaces, Streamlit Cloud, Replit, Colab, Docker, Binder).
 
-reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv"
-# The single command that produces submission.csv from candidates.jsonl.
-# Should run end-to-end within 5 minutes on CPU with 16GB RAM and no network.
+reproduce_command: "python rank_v2.py --candidates ./candidates.jsonl --out ./submission.csv"
 
 # ============================================================================
 # Compute environment
 # ============================================================================
 compute:
-  platform: "HP Victus Gaming Laptop 15"        # Or: "AWS EC2 c5.4xlarge", "Local Linux box", etc.
-  cpu_cores: 16                                 # Number of CPU cores used
-  ram_gb: 16                                    # Available RAM in GB
-  python_version: "3.11"                        # python --version
-  os: "Windows 11 Home"                         # Or "Ubuntu 22.04 LTS", etc.
-  uses_gpu_for_inference: false                 # Must be false — see compute constraints
-  has_network_during_ranking: false             # Must be false — no API calls during ranking
-  pre_computation_required: false               # true if you pre-compute embeddings or train models offline
-  pre_computation_time_minutes: 0               # Approximate, if applicable
+  platform: "HP Victus Gaming Laptop 15"
+  cpu_cores: 16
+  ram_gb: 16
+  python_version: "3.11"
+  os: "Windows 11 Home"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  pre_computation_required: true
+  pre_computation_time_minutes: 35
 
 # ============================================================================
 # AI tools declaration
 # ============================================================================
-# Transparency only — declared use is NOT penalized. Be honest. Stage 5 interview
-# may verify these declarations against your code; declarations that contradict
-# your code or your interview are flagged.
 ai_tools_used:
   - "Gemini"
   - "Claude"
 
 ai_usage_summary: |
-  Used Gemini and Claude to assist in writing python logic, refactoring the scoring engine, and building unit test coverage.
+  Used Claude and Gemini to design the multi-stage ranking architecture, implement
+  XGBoost/LightGBM + FlashRank fusion, and build the Streamlit dashboard.
   No candidate data was fed to any LLM APIs during real-time ranking.
 
 # ============================================================================
-# Approach summary (optional but recommended)
+# Approach summary
 # ============================================================================
 methodology_summary: |
-  Our approach, the Singularity Engine (v2.1), is a deterministic, fast ranking model designed for Senior AI Engineers.
-  It calculates a Technical Floor (ATD) using matched skills/roles against a structured taxonomy, and Execution Agency (HEA)
-  incorporating startup longevity, domain alignment, and activity recency. Scanners filter honeypots, service-only careers,
-  and langchain tourism. Run time is <1.5 seconds for 50k candidates on CPU.
+  Our system uses a 4-stage CPU-only pipeline: (1) hard filters remove honeypots,
+  service-only, ghost, and zero-skill profiles; (2) XGBoost LambdaMART + LightGBM
+  ensemble scores remaining ~40K candidates; (3) FlashRank cross-encoder reranks
+  top 50 against the JD; (4) weighted fusion (40% XGBoost + 20% FlashRank + 40%
+  heuristic singularity_score) produces the final top 100. The heuristic component
+  uses the ATD^1.5 × HEA formula to ensure deep technical skills dominate over
+  keyword stuffing. Total runtime: ~6 seconds on CPU.
 
 # ============================================================================
 # Declarations
 # ============================================================================
 declarations:
-  read_submission_spec: true        # I have read submission_spec.md in full
-  code_is_original_work: true       # My code is my team's original work (using AI as a tool is fine)
-  no_collusion: true                # I have not coordinated my submission with other teams
-  honeypot_check_done: true         # OPTIONAL — set true if you explicitly checked for honeypots in your ranking
-  reproduction_tested: true         # I have tested that my reproduce_command runs end-to-end
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true

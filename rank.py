@@ -17,7 +17,7 @@ exactly two axes and MULTIPLY them:
 Axis A — Absolute Technical Dominance (ATD)
     A hardcoded hierarchical taxonomy of AI difficulty.  We read the
     candidate's skills + career history to find their *highest proven
-    floor* on a 4-level scale (Core → Applied SOTA → Standard → Wrappers).
+    floor* on a 4-level scale (Core -> Applied SOTA -> Standard -> Wrappers).
 
 Axis B — High Execution Agency (HEA)
     Multiplicative modifier from behavioral signals, career structure,
@@ -149,7 +149,7 @@ EVAL_KEYWORDS = frozenset({
 # ║              ATD — ABSOLUTE TECHNICAL DOMINANCE TAXONOMY              ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 #
-# Hierarchical taxonomy: skill name (lowercase) → ATD level (1-4).
+# Hierarchical taxonomy: skill name (lowercase) -> ATD level (1-4).
 # Level 4 = core infrastructure (custom CUDA, distributed training, serving).
 # Level 3 = applied SOTA (fine-tuning, hybrid search, vector DBs, evaluation).
 # Level 2 = standard AI (framework-level training, generic RAG).
@@ -173,15 +173,14 @@ ATD_TAXONOMY: dict[str, int] = {
     "vector database": 3, "vector search": 3, "semantic search": 3,
     "information retrieval": 3, "bm25": 3, "bge": 3, "e5": 3, "openai embeddings": 3,
     "embeddings": 3, "ndcg": 3, "mrr": 3, "map": 3, "offline-to-online correlation": 3, "offline to online": 3,
-    "huggingface": 3, "transformers": 3,
     "mlflow": 3, "mlops": 3, "ray": 3,
-    "haystack": 3, "a/b testing": 3, "ab testing": 3,
+    "haystack": 3, "a/b testing": 3, "ab testing": 3, "reinforcement learning": 3,
 
     # ── Level 2: Standard AI (framework-level training, generic RAG) ──
-    "pytorch": 2, "tensorflow": 2, "deep learning": 2,
-    "machine learning": 2, "scikit-learn": 2,
+    "pytorch": 2, "tensorflow": 2, "deep learning": 2, "huggingface": 2, "transformers": 2, "hugging face transformers": 2,
+    "machine learning": 2, "scikit-learn": 2, "feature engineering": 2, "bentoml": 2, "weights & biases": 2, "kubeflow": 2, "opencv": 2,
     "rag": 2, "retrieval-augmented generation": 2,
-    "nlp": 2, "llamaindex": 2, "python": 2,
+    "nlp": 2, "llamaindex": 2, "python": 2, "time series": 2, "forecasting": 2, "statistical modeling": 2,
     "keras": 2, "spacy": 2, "nltk": 2,
 
     # ── Level 1: The Wrappers (API callers, tutorial-level) ──
@@ -426,7 +425,7 @@ def compute_hea(candidate: dict, weights: dict = None) -> float:
         elif career_titles & SWE_TITLES:
             hea *= 0.7   # Tech background at least
         else:
-            hea *= 0.3   # Non-tech career → strong penalty
+            hea *= 0.3   # Non-tech career -> strong penalty
 
     # ── 2. Experience band (sweet spot around 7 years - continuous Gaussian) ──
     years = profile.get("years_of_experience", 0)
@@ -450,6 +449,9 @@ def compute_hea(candidate: dict, weights: dict = None) -> float:
         hea *= w_fullstack
     elif devops_count >= 1 or backend_count >= 1:
         hea *= 1.0 + (w_fullstack - 1.0) * 0.33
+    else:
+        # Severe penalty for zero backend/infrastructure skills
+        hea *= 0.50
 
     # ── 5. Startup / Small-Company Signal (Chaos Tolerance) ──────────
     small_company_stints = sum(
@@ -667,10 +669,10 @@ def compute_singularity_score(atd: float, hea: float) -> float:
     """Final Score = (ATD ^ 1.5) × HEA
 
     The exponent creates a non-linear gap:
-        ATD=1.0 (Level 4) → 1.000
-        ATD=0.7 (Level 3) → 0.586
-        ATD=0.4 (Level 2) → 0.253
-        ATD=0.15 (Level 1) → 0.058
+        ATD=1.0 (Level 4) -> 1.000
+        ATD=0.7 (Level 3) -> 0.586
+        ATD=0.4 (Level 2) -> 0.253
+        ATD=0.15 (Level 1) -> 0.058
 
     This means a Level 4 candidate is ~17× more valuable than a Level 1
     candidate before HEA multiplier kicks in.

@@ -7,134 +7,121 @@ sdk: docker
 pinned: false
 ---
 
-# Redrob MatchWise — Candidate Discovery & Ranking Engine (v2.1)
+# 🎯 Redrob MatchWise — Multi-Stage Candidate Ranking Engine
 
+A production-grade, CPU-only pipeline that sifts through **100,000 candidate profiles** to surface the **top 100 best-fit** Senior AI Engineers — all in **~6 seconds**.
 
-A production-grade, ultra-efficient candidate ranking system for the **Senior AI Engineer (Founding Team)** role at Redrob AI.
-
-Processes 100,000 synthetic candidate profiles and outputs a CSV containing the **top 100 best-fit candidates** ranked in descending order of suitability under 81 seconds on CPU, completely avoiding the "keyword trap" of traditional recruiters.
+```
+candidates  ──▶  Stage 1: Hard Filter  ──▶  Stage 2: XGBoost + LightGBM  ──▶  Stage 3: FlashRank Rerank  ──▶  Stage 4: Fusion ──▶  top 100
+(100K)           (59K removed)               (top 200)                        (top 50)                             (40/20/40)        submission.csv
+```
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
-### 1. Setup & Installation
-Create a virtual environment and install the lightweight requirements:
 ```bash
-python -m venv .venv
-# Activate virtual environment:
-# Windows (PowerShell): .venv\Scripts\Activate.ps1
-# macOS/Linux: source .venv/bin/activate
-
+# 1. Setup
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-```
 
-### 2. Pre-computation (Offline, Local Development Only)
-**Note to Judges/Reviewers:** You *do not* need to run these steps. We have already run them locally to generate the necessary assets (`honeypots.json`, etc.) which are included in this repository. You also *do not* need to upload or commit the massive `candidates.jsonl` file to the codebase!
+# 2. Run the pipeline (6 seconds)
+python rank_v2.py --candidates ./candidates.jsonl --out ./submission.csv
 
-These offline preparation steps generate metadata and LLM-written reasoning caches before the main sandbox ranking runs:
+# 3. Validate
+python docs/validate_submission.py submission.csv
 
-- **Generate the honeypot filter list:**
-  ```bash
-  python identify_all_honeypots.py --candidates ./docs/candidates.jsonl --out ./honeypots.json
-  ```
-- **Precompute the high-quality LLM reasoning cache:**
-  ```bash
-  # Using Google Gemini API (requires GEMINI_API_KEY environment variable set)
-  python precompute_reasoning.py --mode gemini --top-n 500
-  ```
-
-### 3. Run the Sandbox Ranker (Hackathon Stage 3 Reproduction)
-The single command to reproduce `submission.csv` from the 100K candidates file:
-```bash
-python rank.py --candidates ./candidates.jsonl --out ./submission.csv
-```
-*(Note: If testing locally with our sample, the candidates file is located at `./docs/candidates.jsonl`)*
-
-**Runtime:** ~15 seconds on CPU | **Memory:** ~200 MB | **Dependencies:** Pure Python standard library (No API calls, no network required).
-
-### 4. Validate the Submission
-Verify that the output is formatted correctly and complies with the challenge specifications:
-```bash
-python docs/validate_submission.py ./submission.csv
-```
-
-### 5. Launch the Sandbox Demo Dashboard
-Explore candidate distributions and adjust weights dynamically:
-```bash
+# 4. Launch dashboard
 streamlit run app.py
 ```
-- Open `http://localhost:8501` to access the interactive user interface.
 
 ---
 
-## Architecture: The Singularity Engine
+## 🏗️ Architecture: 4-Stage Pipeline
 
-Rather than using linear weighted addition (which rewards keyword stuffing), the engine operates on two orthogonal axes and multiplies them:
+### Stage 0 — Load Artifacts
+| Artifact | Size | What |
+|----------|------|------|
+| `precomputed_features.npz` | 100K × 51 | Feature matrix (built once offline) |
+| `ranker.xgb` + `ranker.lgb` | — | XGBoost LambdaMART & LightGBM ensemble |
+| `honeypots.json` | 293 IDs | Trap candidate filter list |
 
-$$\text{Final Score} = (\text{ATD}^{1.5}) \times \text{HEA}$$
+### Stage 1 — Hard Filters
+Removes candidates that don't meet the bar:
+
+| Filter | Removed |
+|--------|---------|
+| 🪤 Honeypots | 293 |
+| 🏢 Service-only companies | 9,750 |
+| 🫥 Ghost profiles | 171 |
+| 📉 Zero-skill profiles | 53,097 |
+| 🎭 Skill inflation fraud | 8 |
+
+**~40K / 100K** remain — the viable pool.
+
+### Stage 2 — GBM Ensemble Scoring
+Two gradient-boosted rankers (XGBoost 60% + LightGBM 40%) score all ~40K viable candidates. **Top 200** advance.
+
+### Stage 3 — Cross-Encoder Rerank
+FlashRank TinyBERT (ms-marco-TinyBERT-L-2-v2) reranks the top 50 against the job description — a deep semantic relevance check that keyword search can't match.
+
+### Stage 4 — Score Fusion
 
 ```
-   candidates.jsonl ──► [ Hard Filters ] ──► [ AXIS A: ATD ]
-         (100K)          ├─ Honeypots             └─ 4-level taxonomy
-                         ├─ Service-only          └─ Synonym stemming
-                         └─ Unrelated titles              │
-                                                          ▼
-                                                    [ AXIS B: HEA ]  ──► Sort & output
-                                                      (14 continuous     top 100 CSV
-                                                      signals & fraud)
+Final Score = 0.40 × XGBoost  +  0.20 × FlashRank  +  0.40 × Heuristic
 ```
 
-### 1. Axis A — Absolute Technical Dominance (ATD)
-Evaluates candidates using a strict 4-level difficulty hierarchy of AI engineering depth:
-* **Level 4 (1.00):** Custom GPU kernels (`cuda`, `triton`), distributed training architectures (`deepspeed`, `megatron`), and serving optimization (`vllm`).
-* **Level 3 (0.70):** Applied SOTA techniques (`fine-tuning llms`, `lora`, `peft`), evaluation frameworks (`ndcg`, `mrr`), vector DBs (`faiss`, `pinecone`, `qdrant`), and hybrid search.
-* **Level 2 (0.40):** Standard frameworks (`pytorch`, `tensorflow`), NLP (`nltk`, `spacy`), and basic RAG.
-* **Level 1 (0.15):** API callers (`openai api`, `chatgpt`) and wrapper tools (`langchain`).
+The **Heuristic** component uses the proven singularity formula:
 
-The $ATD^{1.5}$ exponent ensures a Level-4 candidate scores **~17x higher** than a Level-1 wrapper engineer before HEA modifiers, rendering keyword-stuffed wrapper profiles non-viable for the founding engineer role.
+```
+singularity_score = ATD¹·⁵ × HEA
+```
 
-* **Advanced Synonym Stemming:** Uses a zero-dependency canonicalization function (`canonicalize_skill`) to parse spelling variants and abbreviations (e.g. `recsys` -> `recommendation systems`, `vector db` -> `vector database`, `fine tuning` -> `fine-tuning llms`) to maximize recall.
-
-### 2. Axis B — High Execution Agency (HEA)
-A continuous multiplicative modifier mapping 14 career structure and behavioral signals:
-* **Experience Fit:** Continuous Gaussian curve peaking at `7` years.
-* **Active Recency & Notice Period:** Smooth continuous sigmoid decay curves to penalize inactive ghost profiles and long notice periods.
-* **Chaos Tolerance & Startup DNA:** Multipliers for experience in small-scale startup environments.
-* **Product DNA:** Penalizes pure outsourcing/consulting company histories and rewards product experience.
-* **GitHub & Engagement Signals:** Continuous functions for GitHub activity, interview completion rates, and recruiter response rates.
-
-### 3. Hybrid Quota Ranking & Hidden Gems 💎
-The system enforces a **Hybrid Quota** approach for the top 100 results:
-- **Top 90 spots** are strictly reserved for the highest absolute scores (typically Level 4 ATD).
-- **Up to 10 spots** are reserved for "Hidden Gems" — candidates with extremely high Execution Agency ($HEA \ge 1.25$) but slightly lower technical depth ($ATD < 1.0$). 
-This ensures the final output includes highly-driven, fast-learning "athletes" who might lack the most elite AI framework credentials but possess undeniable startup hustle and shipping DNA.
-
-### 4. Integrated Fraud Scanners
-- **Timeline Overlapping Check:** Detects and penalizes resumes with overlapping full-time stint dates (simultaneous stints > 90 days).
-- **Buzzword Stuffing Penalty:** Penalizes profiles with an unnaturally high skill count relative to their total experience.
-- **Title Inflation Detector:** Flags profiles claiming senior leadership titles (VP, Lead, Principal, Chief) with under 4 years of total experience.
+Where **ATD** measures technical depth (GPU kernels → API scripts) and **HEA** captures career execution signals.
 
 ---
 
-## Streamlit Dashboard Features
-- **Weight Calibration:** recasting sliders to adjust priorities (e.g. increase notice period penalty, dial up GitHub activity importance, or modify startup experience weights).
-- **Interactive Scatter Chart:** Plots candidate positioning in real-time, showing Technical Floor (ATD) vs. Execution Agency (HEA) with bubble sizing representing their final rank.
+## 📊 Streamlit Dashboard
+
+- **Pipeline breakdown** — see each stage's timing & output
+- **Weight sliders** — tweak fusion weights live
+- **Candidate explorer** — search by ID, inspect full score breakdown
+- **Honeypot detector** — list filtered candidates with reasons
+
+```bash
+streamlit run app.py    # → http://localhost:8501
+```
 
 ---
 
-## Compute & Compliance Constraints
+## ⚡ Performance
 
-| Constraint | Limit | Actual | Status |
-|------------|-------|--------|--------|
-| **Runtime** | ≤ 300 seconds | **~80 seconds** | Passed |
-| **Memory** | ≤ 16 GB | **~200 MB** | Passed |
-| **Compute** | CPU Only | **CPU Only** | Passed |
-| **Network** | Offline during ranking | **Offline** | Passed |
-| **Disk Space**| ≤ 5 GB | **~50 MB** | Passed |
+| Constraint | Limit | Actual |
+|------------|-------|--------|
+| Runtime | ≤ 300s | **~6s** |
+| Memory | ≤ 16 GB | **~2 GB** |
+| CPU only | Required | ✅ |
+| No network | Required | ✅ |
+| Output rows | 100 | ✅ |
+| Monotonic scores | Required | ✅ |
 
 ---
 
-## AI Tools Used
-- **Claude / Gemini**: Used for architectural optimization, continuous mathematical curve design, and dashboard layout planning.
-- No candidate data was sent to any external model during the main sandboxed ranking runs.
+## 📁 Project Map
+
+```
+rank_v2.py              # Main pipeline (CLI entry point)
+app.py                  # Streamlit dashboard
+build_features.py       # Offline: 51-feature extraction
+train_ranker.py         # Offline: model training
+rank.py                 # Library: taxonomy & ATD/HEA helpers
+precomputed_features.npz # 100K × 51 feature matrix
+ranker.xgb / ranker.lgb # Trained models
+submission.csv          # Output: top 100 ranked
+requirements.txt        # Dependencies
+Dockerfile              # Container config
+```
+
+---
+
+*Built with Claude & Gemini. No candidate data was sent to any LLM during ranking.*
