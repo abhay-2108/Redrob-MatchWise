@@ -45,14 +45,11 @@ compute:
 # ============================================================================
 # AI tools declaration
 # ============================================================================
-ai_tools_used:
-  - "Gemini"
-  - "Claude"
+ai_tools_used: []
 
 ai_usage_summary: |
-  Used Claude and Gemini to design the multi-stage ranking architecture, implement
-  XGBoost/LightGBM + FlashRank fusion, and build the Streamlit dashboard.
-  No candidate data was fed to any LLM APIs during real-time ranking.
+  No AI tools were used during ranking inference. All ranking is done offline
+  with precomputed features and trained models on CPU with no network access.
 
 # ============================================================================
 # Approach summary

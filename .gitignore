@@ -7,13 +7,8 @@ __pycache__/
 *.csv
 !docs/sample_submission.csv
 !submission.csv
-*.npz
-!precomputed_features.npz
-*.xgb
-!ranker.xgb
-*.lgb
-!ranker.lgb
 *.bak
+*_importances.npz
 honeypots.json
 reasoning_cache.json
 feedback_logs.jsonl

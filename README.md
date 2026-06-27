@@ -124,4 +124,4 @@ Dockerfile              # Container config
 
 ---
 
-*Built with Claude & Gemini. No candidate data was sent to any LLM during ranking.*
+

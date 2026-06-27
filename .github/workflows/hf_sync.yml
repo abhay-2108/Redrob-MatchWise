@@ -17,4 +17,8 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git push --force https://raj0120:$HF_TOKEN@huggingface.co/spaces/raj0120/redrob-matchwise main
+          git remote add space https://raj0120:$HF_TOKEN@huggingface.co/spaces/raj0120/redrob-matchwise
+          # Push LFS objects to HF Spaces (supports LFS for binary files)
+          git lfs push --all space
+          # Push git refs (including LFS pointer files)
+          git push --force space main
