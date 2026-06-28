@@ -139,8 +139,8 @@ with st.sidebar:
     uploaded = None
     if dataset_source == "Upload Custom File":
         uploaded = st.file_uploader(
-            "Upload candidate profiles (.json or .jsonl)",
-            type=["json", "jsonl"],
+            "Upload candidate profiles (.json, .jsonl, .gz)",
+            type=["json", "jsonl", "gz"],
             on_change=handle_upload
         )
     
@@ -273,6 +273,14 @@ def load_precomputed_dataset(features_path, candidates_path):
 @st.cache_resource(show_spinner=False, max_entries=1)
 def parse_and_extract(raw_bytes):
     """Caches the parsing and feature extraction so it only runs once per file."""
+    if raw_bytes.startswith(b"\x1f\x8b"):
+        import gzip
+        try:
+            raw_bytes = gzip.decompress(raw_bytes)
+        except Exception as e:
+            st.error(f"Failed to decompress gzipped upload: {e}")
+            return [], [], np.array([])
+            
     candidates = []
     try:
         parsed = json.loads(raw_bytes)
