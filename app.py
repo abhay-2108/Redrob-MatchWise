@@ -128,11 +128,21 @@ with st.sidebar:
     def handle_upload():
         st.session_state.pop("fused", None)
         
-    uploaded = st.file_uploader(
-        "Upload candidate profiles (.json or .jsonl)",
-        type=["json", "jsonl"],
-        on_change=handle_upload
+    dataset_source = st.selectbox(
+        "Select Dataset to Rank",
+        ["Default Sample (50 profiles)", "Full Dataset (100k profiles)", "Upload Custom File"],
+        index=0,
+        on_change=handle_upload,
+        help="Choose between the sample subset (50 profiles), the pre-installed full set (100k profiles), or uploading your own JSONL file."
     )
+    
+    uploaded = None
+    if dataset_source == "Upload Custom File":
+        uploaded = st.file_uploader(
+            "Upload candidate profiles (.json or .jsonl)",
+            type=["json", "jsonl"],
+            on_change=handle_upload
+        )
     
     st.markdown("---")
     st.markdown("""
@@ -218,6 +228,48 @@ def load_flashrank():
         st.warning(f"Failed to load FlashRank: {e}")
         return None
 
+@st.cache_resource(show_spinner=False)
+def load_sample_dataset(file_path):
+    import json
+    candidates = []
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    candidates.append(json.loads(line))
+                except Exception:
+                    pass
+    # Extract features
+    feature_matrix = np.zeros((len(candidates), NUM_FEATURES), dtype=np.float32)
+    candidate_ids = []
+    for i, cand in enumerate(candidates):
+        cid = cand.get("candidate_id", "")
+        candidate_ids.append(cid)
+        feature_matrix[i] = extract_features(cand)
+    feature_matrix = np.nan_to_num(feature_matrix, nan=0.0, posinf=1.0, neginf=0.0)
+    return candidates, candidate_ids, feature_matrix
+
+@st.cache_resource(show_spinner=False)
+def load_precomputed_dataset(features_path, candidates_path):
+    import gzip
+    import json
+    data = np.load(features_path, allow_pickle=True)
+    feature_matrix = data["features"]
+    candidate_ids = list(data["candidate_ids"])
+    
+    candidates = []
+    opener = gzip.open if candidates_path.endswith(".gz") else open
+    with opener(candidates_path, "rt", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    candidates.append(json.loads(line))
+                except Exception:
+                    pass
+    return candidates, candidate_ids, feature_matrix
+
 @st.cache_resource(show_spinner=False, max_entries=1)
 def parse_and_extract(raw_bytes):
     """Caches the parsing and feature extraction so it only runs once per file."""
@@ -252,15 +304,30 @@ def parse_and_extract(raw_bytes):
     feature_matrix = np.nan_to_num(feature_matrix, nan=0.0, posinf=1.0, neginf=0.0)
     return candidates, candidate_ids, feature_matrix
 
-if uploaded is not None:
-    # Parse and extract from uploaded (Cached!)
-    with st.spinner("Stage 0: Extracting offline features (Cached for speed - may take 1-3 mins for 100k candidates)..."):
+# ── STAGE 0: Load Candidates and Features ──
+candidates = []
+candidate_ids = []
+feature_matrix = np.array([])
+
+if dataset_source == "Default Sample (50 profiles)":
+    with st.spinner("Stage 0: Loading default sample dataset (50 profiles)..."):
+        sample_path = os.path.join(PROJECT_DIR, "data", "candidates.jsonl")
+        candidates, candidate_ids, feature_matrix = load_sample_dataset(sample_path)
+
+elif dataset_source == "Full Dataset (100k profiles)":
+    with st.spinner("Stage 0: Loading precomputed full dataset (100k profiles - ~5 seconds)..."):
+        features_path = os.path.join(PROJECT_DIR, "artifacts", "precomputed_features.npz")
+        candidates_path = os.path.join(PROJECT_DIR, "data", "candidates_backup.jsonl.gz")
+        candidates, candidate_ids, feature_matrix = load_precomputed_dataset(features_path, candidates_path)
+
+elif dataset_source == "Upload Custom File" and uploaded is not None:
+    with st.spinner("Stage 0: Extracting offline features from uploaded file..."):
         raw_bytes = uploaded.getvalue()
         candidates, candidate_ids, feature_matrix = parse_and_extract(raw_bytes)
 
-    if not candidates:
-        st.error("No valid candidate profiles found.")
-        st.stop()
+if not candidates:
+    st.info("💡 Select a dataset source or upload candidate profiles in the sidebar to begin ranking.")
+    st.stop()
 
     if "fused" not in st.session_state or st.session_state.get("run_pipeline", False):
         t_start = time.time()

@@ -27,8 +27,10 @@ presentation_deck.md
 job_description.docx
 
 # --- Data ---
-data/
+data/*
 !data/candidates.jsonl
+!data/*.gz
+
 
 # --- OpenWork workspace config ---
 .opencode/
