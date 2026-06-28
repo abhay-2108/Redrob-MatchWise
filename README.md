@@ -9,60 +9,64 @@ pinned: false
 
 # 🎯 Redrob MatchWise — Multi-Stage Candidate Ranking Engine
 
-A production-grade, CPU-only pipeline that sifts through **100,000 candidate profiles** to surface the **top 100 best-fit** Senior AI Engineers — all in **~8–10 seconds**.
+Filters **100,000 candidate profiles** down to the **top 100 best-fit** Senior AI Engineers (Founding Team) in **~8–10 seconds** on CPU.
 
 ```
-candidates  ──▶  Stage 1: Hard Filter  ──▶  Stage 2: GBM Ensemble    ──▶  Stage 3: FlashRank Rerank  ──▶  Stage 4: Fusion ──▶  top 100
-(100K)           (~79K removed)              (top 200)                        (top 50)                             (40/20/40)        submission.csv
+                       Stage 1                      Stage 2                Stage 3                  Stage 4
+candidates ──▶  Hard Filter (7 rules) ──▶  GBM Ensemble (top 200) ──▶  FlashRank (top 50) ──▶  Score Fusion ──▶  submission.csv
+(100K)            79K removed                 XGBoost 60% + LGBM 40%      TinyBERT CE                40/20/40          100 rows
 ```
 
 ---
 
-## ⚠️ Before You Start
+## 📋 Table of Contents
 
-### Git LFS Required
-Binary model files (`precomputed_features.npz`, `ranker.xgb`, `ranker.lgb`) are stored with **Git LFS**. Clone with:
-
-```bash
-git lfs install
-git lfs pull
-```
-
-Without this, you get pointer files and the pipeline will fail to load models.
-
-### Precomputation Steps (run once offline)
-The pipeline needs pre-built features and trained models. If they're not present or you want to rebuild:
-
-```bash
-# 1. Extract 51 features from candidates (~30 min)
-python build_features.py --candidates <path/to/candidates.jsonl>
-
-# 2. Train XGBoost + LightGBM rankers (~5 min)
-python train_ranker.py
-```
-
-Otherwise, the committed `precomputed_features.npz`, `ranker.xgb`, and `ranker.lgb` are used directly.
+- [Quick Start](#-quick-start)
+- [Architecture](#-architecture-4-stage-pipeline)
+- [Streamlit Dashboard](#-streamlit-dashboard)
+- [A/B Experiment](#-ab-experiment)
+- [Performance](#-performance)
+- [Deployments](#-demo-deployments)
+- [Project Map](#-project-map)
+- [Dependencies](#-dependencies)
 
 ---
 
 ## 🚀 Quick Start
 
 ```bash
-# 1. Clone with LFS
-git lfs install && git lfs pull
+# 1. Clone with LFS (required for model files)
+git lfs install
+git lfs pull
 
-# 2. Setup
-python -m venv .venv && source .venv/bin/activate
+# 2. Setup virtual environment
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Run the pipeline (~8–10 seconds)
+# 3. Run the ranking pipeline
 python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
 
-# 4. Validate
+# 4. Validate output
 python docs/validate_submission.py submission.csv
 
-# 5. Launch dashboard
+# 5. Launch the interactive dashboard
 streamlit run app.py
+```
+
+**Supported input formats:** `.jsonl`, `.jsonl.gz` (auto-detected).
+
+### Precomputation (run once, offline)
+
+If `precomputed_features.npz` or trained models are missing:
+
+```bash
+# 1. Extract 51 features from candidates (~30 min for 100K)
+python build_features.py --candidates <path/to/candidates.jsonl>
+
+# 2. Train XGBoost + LightGBM rankers (~5 min)
+python train_ranker.py
 ```
 
 ---
@@ -70,119 +74,166 @@ streamlit run app.py
 ## 🏗️ Architecture: 4-Stage Pipeline
 
 ### Stage 0 — Load Artifacts
-| Artifact | Size | What |
-|----------|------|------|
-| `precomputed_features.npz` | 100K × 51 | Feature matrix (built once offline) |
-| `ranker.xgb` + `ranker.lgb` | — | XGBoost LambdaMART & LightGBM ensemble |
-| `honeypots.json` | 293 IDs | Trap candidate filter list |
+
+| Artifact | Format | Purpose |
+|----------|--------|---------|
+| `precomputed_features.npz` | 100K × 51 float32 | Feature matrix (built offline by `build_features.py`) |
+| `ranker.xgb` + `ranker.lgb` | XGBoost / LightGBM | LambdaMART + LightGBM ensemble |
+| `honeypots.json` | 293 IDs | Known-fake candidate trap list |
 
 ### Stage 1 — Hard Filters
-Removes candidates that don't meet the bar:
 
-| Filter | Removed |
-|--------|---------|
-| 🪤 Honeypots | 293 |
-| 🏢 Service-only companies | 9,750 |
-| 🫥 Ghost profiles | 171 |
-| 📉 Zero-skill profiles | 53,097 |
-| 🎭 Skill inflation fraud | 8 |
-| 🌍 Location/Relocation | 50,498 |
+Removes candidates that fail any of these checks:
 
-**~20.6K / 100K** remain — the viable pool. The location filter (added in the latest pipeline update) is the second-largest filter and ensures international candidates without relocation intent are excluded.
+| # | Filter | Candidates Removed | Description |
+|---|--------|:------------------:|-------------|
+| 1 | 🪤 Honeypots | 293 | Known fake/trap profiles |
+| 2 | ⏳ Timeline fraud | 0 | Overlapping job stints > 90 days |
+| 3 | 🎭 Skill inflation | 8 | ≥ 5 "expert" skills with 0 months duration |
+| 4 | 🏢 Service-only companies | 9,750 | Entire career at TCS, Infosys, Wipro, Accenture, etc. |
+| 5 | 🫥 Ghost candidates | 171 | Inactive > 180 days AND response rate < 5% |
+| 6 | 📉 Zero relevant skills | 53,097 | No skills matching the ATD taxonomy (ATD level = 0) |
+| 7 | 🌍 Location / Relocation | 50,498 | Outside India and unwilling to relocate |
+
+**~20,600 / 100,000 candidates remain** after filtering.
+
+All filter thresholds are live-tunable from the dashboard (Filter Aggressiveness slider affects the skill-inflation cutoff).
 
 ### Stage 2 — GBM Ensemble Scoring
-Two gradient-boosted rankers (XGBoost 60% + LightGBM 40%) score all ~20.6K viable candidates. **Top 200** advance.
 
-### Stage 3 — Cross-Encoder Rerank
-FlashRank TinyBERT (ms-marco-TinyBERT-L-2-v2) reranks the top 50 against the job description — a deep semantic relevance check that keyword search can't match.
+The ~20,600 viable candidates are scored by a **two-model ensemble**:
 
-### Stage 4 — Score Fusion
+- **XGBoost LambdaMART** (60% weight) — `objective=rank:ndcg`, directly optimizes NDCG
+- **LightGBM** (40% weight) — gradient-boosted ranker
+
+If LightGBM is unavailable, the pipeline gracefully falls back to normalized XGBoost scores only.
+
+The **top 200** candidates by ensemble score advance to Stage 3.
+
+### Stage 3 — FlashRank Cross-Encoder Reranking
+
+The top 50 candidates are semantically reranked against the job description using FlashRank's **ms-marco-TinyBERT-L-2-v2** — a lightweight cross-encoder that evaluates how well each candidate's profile (headline, summary, skills, experience) matches the role's requirements.
+
+The JD query used:
+```
+Senior AI Engineer founding team, embeddings retrieval ranking LLM fine-tuning,
+sentence-transformers BGE E5 vector database Pinecone Weaviate FAISS,
+evaluation NDCG MRR MAP A/B testing, Python, production systems,
+startup product company, Pune Noida India
+```
+
+Can be skipped with `--no-crossencoder` for faster runs.
+
+### Stage 4 — Score Fusion + Reasoning
 
 ```
-Final Score = 0.40 × GBM Ensemble  +  0.20 × FlashRank  +  0.40 × Heuristic
+final_score = 0.40 × GBM_ensemble  +  0.20 × FlashRank  +  0.40 × Heuristic
 ```
 
-Where **GBM Ensemble** = XGBoost LambdaMART (60%) + LightGBM (40%).
+Where:
+- **GBM ensemble** = XGBoost (60%) + LightGBM (40%), min-max normalized to [0, 1]
+- **FlashRank** = raw cross-encoder score (fallback: `xgb_score × 0.8` if unavailable)
+- **Heuristic** = `ATD¹·⁵ × HEA` — the proven Singularity Engine formula
 
-The **Heuristic** component uses the proven singularity formula:
+Fusion weights are configurable at runtime (see [Dashboard](#-streamlit-dashboard)).
 
-```
-singularity_score = ATD¹·⁵ × HEA
-```
+Each candidate gets a **reasoning string** generated by the heuristic engine, detailing their ATD level, HEA score, key strengths, potential concerns, and pipeline metadata (ranker score, IR match ratio, skill depth). The top 100 by fused score are written to the output CSV.
 
-Where **ATD** measures technical depth (GPU kernels → API scripts) and **HEA** captures career execution signals.
+#### Output Format
 
-#### Live Tuning & Presets
+The output CSV (`submission.csv`) has exactly these 4 columns:
 
-The dashboard sidebar exposes all three fusion weights as draggable sliders that auto-normalize.
-A **Quick Preset** dropdown lets you switch between 5 pre-tuned configurations from the A/B experiment:
+| Column | Description |
+|--------|-------------|
+| `candidate_id` | e.g. `CAND_0069905` |
+| `rank` | 1–100, strictly decreasing by score |
+| `score` | Fused score, rounded to 6 decimal places |
+| `reasoning` | AI-generated evaluation text |
 
-| Preset | XGBoost | FlashRank | Heuristic | Best For |
-|--------|---------|-----------|-----------|----------|
-| **Default (Balanced)** — 🏆 *recommended* | 0.40 | 0.20 | 0.40 | General use — highest IR-skill coverage & company diversity |
-| ML Heavy | 0.60 | 0.25 | 0.15 | When you trust the trained model more than hand-crafted rules |
-| Heuristic Heavy | 0.20 | 0.10 | 0.70 | Maximizing India-location & execution agency signals |
+#### Fusion Presets
+
+All 5 presets are selectable from the dashboard:
+
+| Preset | GBM | FlashRank | Heuristic | Best Used When |
+|--------|:---:|:---------:|:---------:|----------------|
+| **Default (Balanced)** 🏆 | 0.40 | 0.20 | 0.40 | General use — highest IR-skill coverage & company diversity |
+| ML Heavy | 0.60 | 0.25 | 0.15 | Trusting trained models over hand-crafted rules |
+| Heuristic Heavy | 0.20 | 0.10 | 0.70 | Prioritizing India-location fit & execution agency signals |
 | Semantic Focus | 0.35 | 0.50 | 0.15 | Emphasizing FlashRank semantic relevance |
-| Balanced ML+ | 0.45 | 0.30 | 0.25 | Gentle bias toward ML without sacrificing heuristics |
-
-> **A/B experiment result:** The Default preset wins across the most quality proxies (highest IR-skill coverage, most company diversity, finds hidden gems, competitive India rate). See [A/B Experiment](#-ab-experiment) below.
+| Balanced ML+ | 0.45 | 0.30 | 0.25 | Gentle ML bias without sacrificing heuristics |
 
 ---
 
 ## 📊 Streamlit Dashboard
 
-- **Pipeline breakdown** — see each stage's timing & output
-- **Weight sliders** — tweak fusion weights live with auto-normalization
-- **Quick Presets** — switch between 5 pre-tuned weight configurations instantly
-- **Filter Aggressiveness** — control skill inflation cutoffs
-- **Rerank Count** — balance speed vs semantic depth
-- **Blind A/B Mode** — interleave two ranking models for blind recruiter evaluation
-- **Candidate explorer** — browse ranked cards with score breakdown, skill pills, signal tags, and career history
-- **Feedback buttons** — 👍/👎 per candidate to build training data
-- **Retrain with Feedback** — re-tune rankers using collected recruiter evaluations
-- **Multi-format export** — download results as CSV or Excel (.xlsx) with a single click
-
 ```bash
 streamlit run app.py    # → http://localhost:8501
 ```
+
+### Sidebar Controls
+
+| Section | Controls |
+|---------|----------|
+| **Dataset** | Select sample (50 profiles), full dataset (100K), or upload custom `.jsonl`/`.gz` |
+| **Pipeline** | Toggle FlashRank reranking, set XGBoost Top-K (10–500) |
+| **Score Weights** | Quick Preset dropdown (5 presets), 3 individual sliders with auto-normalization |
+| **Advanced** | Filter Aggressiveness slider, Rerank Count slider, Reset All button |
+| **Evaluation** | Blind A/B Mode toggle (interleaves heuristic vs ML rankings) |
+| **Actions** | Rerun Pipeline button, Retrain with Feedback button |
+
+### Tabs
+
+#### 🔍 Candidate Search
+- **Mode tag** — shows whether the ML pipeline or heuristic-only fallback is active
+- **KPI ribbon** — candidates scanned, latency, viable matches, top score
+- **Candidate cards** — rank badge (gold/silver/bronze), score with progress bar, name/title/company, location/experience/education, skill pills (advanced + other), signal tags (open to work, relocation, notice period, response rate), hidden gem badge
+- **Feedback buttons** — 👍 Good / 👎 Reject per candidate (saved to `feedback_logs.jsonl`)
+- **Career History & AI Reasoning** — expandable section per candidate
+- **Export** — popover with CSV and Excel (.xlsx) download options; same 4-column format
+
+#### 📈 Evaluation Dashboard
+- **A/B stats** — average sentiment and vote count per model source
+- **Engagement trend** — line chart of daily recruiter sentiment over time
+- **Recent feedback** — table of last 10 ratings
 
 ---
 
 ## 📈 A/B Experiment
 
-An automated A/B experiment (`ab_experiment.py`) compared 5 weight presets on the full 100K pipeline. All presets share stages 0–3; stage 4 (fusion) is re-evaluated per preset.
+Script: `ab_experiment.py` compares 5 fusion weight presets. Stages 0–3 run once; Stage 4 is re-evaluated per preset.
 
-### Results
+**Outputs:** `experiments/ab_comparison.csv` (per-candidate scores across all presets) and `experiments/ab_summary.csv` (aggregate metrics).
 
-| Preset | Weights | Mean | ATD L3+ | IR Skills | India | Gems | Companies |
-|--------|---------|------|---------|-----------|-------|------|-----------|
-| **Default (Balanced)** | 40/20/40 | 0.496 | 100% | **93%** | 96% | **1** | **60** |
+### Aggregate Results
+
+| Preset | Weights | Mean Score | ATD L3+ | IR Skills | India | Hidden Gems | Companies |
+|--------|---------|:----------:|:-------:|:---------:|:-----:|:-----------:|:---------:|
+| **Default (Balanced)** 🏆 | 40/20/40 | 0.496 | **100%** | **93%** | 96% | **1** | **60** |
 | ML Heavy | 60/25/15 | 0.465 | 100% | 93% | 95% | 0 | 60 |
 | Heuristic Heavy | 20/10/70 | **0.575** | 100% | 89% | **98%** | 1 | 60 |
 | Semantic Focus | 35/50/15 | 0.404 | 100% | 93% | 95% | 0 | 60 |
 | Balanced ML+ | 45/30/25 | 0.459 | 100% | 93% | 95% | 0 | 60 |
 
-### Overlap (Jaccard Similarity)
+### Overlap Analysis (Jaccard Similarity)
 
 | | Default | ML Heavy | Heuristic | Semantic | ML+ |
-|---|---------|----------|-----------|----------|-----|
-| Default | 1.000 | 0.852 | 0.639 | 0.835 | 0.887 |
-| ML Heavy | | 1.000 | 0.538 | 0.905 | 0.961 |
-| Heuristic | | | 1.000 | 0.575 | 0.562 |
-| Semantic | | | | 1.000 | 0.887 |
+|---|:-------:|:--------:|:---------:|:--------:|:---:|
+| **Default** | 1.000 | 0.852 | 0.639 | 0.835 | 0.887 |
+| **ML Heavy** | | 1.000 | 0.538 | 0.905 | 0.961 |
+| **Heuristic Heavy** | | | 1.000 | 0.575 | 0.562 |
+| **Semantic Focus** | | | | 1.000 | 0.887 |
 
 ### Key Findings
 
-1. **All presets achieve 100% ATD Level 3+** — the XGBoost model dominates, regardless of fusion weights
-2. **Default is the best all-rounder** — highest IR-skill coverage (93%), most company diversity (60 unique), finds hidden gems, and 96% India-located candidates
-3. **Heuristic Heavy is the most differentiated** — only 64% overlap with Default; boosts India to 98% and mean score to 0.575, but loses 4% IR coverage
-4. **ML-heavy presets (B, D, E) cluster together** — 90–96% overlap with each other, meaning weight shifts in the ML+Semantic range produce nearly identical top-100s
-5. **Default (current) wins composite metric** — weighted score of ATD×IR×India = 96.0, highest overall
+1. **100% ATD L3+ across all presets** — the XGBoost model dominates regardless of fusion weights
+2. **Default wins on composite quality** — highest IR-skill coverage (93%), most company diversity (60 unique), hidden gems found, 96% India-located
+3. **Heuristic Heavy is most differentiated** — only 64% overlap with Default; pushes India to 98% and mean score to 0.575, at the cost of 4% IR coverage
+4. **ML-heavy presets cluster** — 90–96% overlap, meaning weight shifts in the ML+Semantic range produce nearly identical top-100s
 
-**Recommendation:** Keep the current default weights. Use the Quick Preset dropdown to switch to Heuristic Heavy when prioritizing India-location fit over IR-specific skill coverage.
+**Recommendation:** Keep Default (40/20/40) as the primary configuration. Use the preset dropdown to switch when specific tradeoffs are needed.
 
 ```bash
-# Run the experiment yourself
+# Run the experiment
 python ab_experiment.py
 # Output: experiments/ab_comparison.csv, experiments/ab_summary.csv
 ```
@@ -193,65 +244,115 @@ python ab_experiment.py
 
 | Constraint | Limit | Actual |
 |------------|-------|--------|
-| Runtime | ≤ 300s | **~8–10s** (measured: 7.4–12.3s across 3 runs) |
+| Wall-clock runtime | ≤ 300s | **~8–10s** (measured 7.4–12.3s across 3 identical runs) |
 | Memory | ≤ 16 GB | **~2 GB** |
 | CPU only | Required | ✅ |
-| No network | Required | ✅ |
-| Output rows | 100 | ✅ |
-| Monotonic scores | Required | ✅ |
-| Deterministic | Required | ✅ (3 runs, byte-identical) |
+| No network | Required | ✅ (models are local) |
+| Output rows | Exactly 100 | ✅ |
+| Monotonic scores | Required | ✅ (strictly decreasing) |
+| Deterministic | Required | ✅ (3 runs produced byte-identical output) |
 
 ---
 
 ## 🌐 Demo Deployments
 
-| Platform | Link | ML Pipeline? | Status |
-|----------|------|-------------|--------|
-| **Hugging Face Spaces** | [redrob-matchwise.hf.space](https://huggingface.co/spaces/raj0120/redrob-matchwise) | Partial — running older artifacts | ❌ **Out of date** — missing latest model retraining, location filter, and pipeline fixes. Only ~83% candidate overlap with the authoritative pipeline. Needs redeployment. |
-| **Streamlit Cloud** | [redrob-matchwise.streamlit.app](https://redrob-matchwise.streamlit.app/) | ✅ Full ML | ⚠️ **Slightly outdated** — same 100 candidates but fusion scores differ by ~1.5% max. Needs model artifact refresh. |
+| Platform | URL | Pipeline Status | Notes |
+|----------|-----|:---------------:|-------|
+| **HuggingFace Spaces** | [redrob-matchwise.hf.space](https://huggingface.co/spaces/raj0120/redrob-matchwise) | ❌ **Outdated** | Running older artifacts — only 83.5% candidate overlap with the authoritative pipeline. Missing the location filter and latest model retraining. |
+| **Streamlit Cloud** | [redrob-matchwise.streamlit.app](https://redrob-matchwise.streamlit.app/) | ⚠️ **Slightly outdated** | Same top-100 candidates as local, but fusion scores differ by ~1.5% max due to older XGBoost model artifacts. |
+| **Local (this repo)** | `streamlit run app.py` | ✅ **Authoritative** | Full ML pipeline with latest retrained models, location filter, and fusion tuning. |
 
-### Why results differ across deployments
-
-Our latest pipeline includes changes made *after* these deployments:
+### Why results differ
 
 | Change | Local | Streamlit Cloud | HuggingFace |
 |--------|:-----:|:---------------:|:-----------:|
 | XGBoost + LightGBM retraining | ✅ | ❌ (older models) | ❌ |
 | Location hard filter | ✅ | ✅ | ❌ |
 | Fusion weight tuning | ✅ | ✅ | ❌ |
-| Candidate overlap vs local | 100% | 100% | **83.5%** |
+| Candidate overlap vs local | 100% | 100% | 83.5% |
 | Score correlation vs local | 1.0000 | 0.9996 | 0.9432 |
 
-### Running the authoritative pipeline locally
+The authoritative output for submission is from the local pipeline. The pipeline is fully deterministic — running it 3 times on identical input produces byte-identical output.
+
+### Docker
+
+For containerized deployment (used by HuggingFace Spaces):
 
 ```bash
-# This produces the actual submission output
-python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
-python docs/validate_submission.py submission.csv
+docker build -t redrob-matchwise .
+docker run -p 7860:7860 redrob-matchwise
 ```
 
-The pipeline is **fully deterministic** — running it 3 times on the same input produces byte-identical output. See `submission.csv` for the latest authoritative result.
+The Docker image exposes port 7860 (standard for HuggingFace Spaces). Set the Space to **Container** mode.
 
 ---
 
 ## 📁 Project Map
 
 ```
-rank_v2.py              # Main pipeline (CLI entry point) — multi-stage ranking
-app.py                  # Streamlit dashboard — tuning, export (CSV + Excel), feedback
-ab_experiment.py        # A/B experiment runner (5 weight presets)
-build_features.py       # Offline: 51-feature extraction
-train_ranker.py         # Offline: XGBoost + LightGBM training
-src/rank.py             # Library: taxonomy, ATD/HEA helpers, heuristic engine
-precomputed_features.npz # 100K × 51 feature matrix
-ranker.xgb / ranker.lgb # Trained models (XGBoost + LightGBM)
-honeypots.json          # 293 known-fake candidate IDs
-submission.csv          # Output: top 100 ranked (tracked in git)
-requirements.txt        # Dependencies (openpyxl for Excel export)
-Dockerfile              # Container config
-experiments/            # A/B comparison CSVs & summary
+root/
+├── rank_v2.py                  # Main pipeline CLI — 4-stage ranking
+├── app.py                      # Streamlit dashboard — tuning, export, feedback
+├── ab_experiment.py            # A/B experiment runner (5 weight presets)
+├── build_features.py           # Offline: extract 51 features from candidates
+├── train_ranker.py             # Offline: train XGBoost + LightGBM models
+│
+├── src/
+│   └── rank.py                 # Library: ATD taxonomy, HEA computation, reasoning, singularity engine
+│
+├── submission.csv              # Current output — top 100 ranked candidates (tracked in git)
+├── requirements.txt            # Dependencies (includes openpyxl for Excel export)
+├── Dockerfile                  # Container config (HuggingFace Spaces)
+│
+├── data/
+│   ├── candidates.jsonl         # Sample dataset (50 profiles)
+│   └── candidates_backup.jsonl.gz  # Full dataset (100,000 profiles, gzip compressed)
+│
+├── artifacts/
+│   ├── precomputed_features.npz  # 100K × 51 feature matrix (float32)
+│   ├── ranker.xgb               # XGBoost LambdaMART model
+│   ├── ranker.lgb               # LightGBM model
+│   └── honeypots.json           # 293 known-fake candidate IDs
+│
+├── experiments/
+│   ├── ab_comparison.csv        # Per-preset top-100 with component scores
+│   └── ab_summary.csv           # Aggregate metrics per preset
+│
+├── docs/
+│   ├── validate_submission.py   # Challenge-rule compliance checker
+│   ├── sample_submission.csv    # Example valid submission
+│   ├── job_description.txt      # JD copy
+│   ├── submission_spec.txt      # Output format specification
+│   ├── candidate_schema.json    # Candidate JSON schema
+│   └── ...                      # Reference docs, templates
+│
+├── flashrank_cache/             # Cached FlashRank model (created on first run)
+├── feedback_logs.jsonl          # Recruiter feedback log (created by dashboard)
+├── .streamlit/
+│   └── config.toml              # Streamlit config (upload limit: 1000MB)
+└── .gitignore                   # Ignores *.csv except submission.csv + docs/*
 ```
 
 ---
 
+## 📦 Dependencies
 
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `streamlit` | ≥ 1.30.0 | Interactive dashboard |
+| `numpy` | ≥ 1.24.0 | Feature matrix operations |
+| `xgboost` | ≥ 2.0.0 | LambdaMART ranking model |
+| `lightgbm` | ≥ 4.0.0 | Secondary GBM ranker |
+| `sentence-transformers` | ≥ 2.7.0 | Semantic similarity feature (offline) |
+| `flashrank` | ≥ 0.2.0 | Cross-encoder reranking (Stage 3) |
+| `plotly` | ≥ 5.18.0 | Evaluation charts |
+| `pandas` | ≥ 2.0.0 | Data manipulation, Excel export |
+| `openpyxl` | ≥ 3.1.0 | Excel (.xlsx) export in dashboard |
+
+All dependencies are CPU-only, open-source, and installable via `pip install -r requirements.txt`.
+
+---
+
+## 📄 License
+
+Built for the Redrob Intelligent Candidate Discovery Hackathon.
