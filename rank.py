@@ -258,6 +258,11 @@ PROF_MULTIPLIER = {"beginner": 0.5, "intermediate": 0.75, "advanced": 1.0, "expe
 # ║                   ATD SCORING (AXIS A)                                ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
+# Precomputed cleaned keys to speed up canonicalize_skill (called millions of times)
+_CLEANED_TAXONOMY_KEYS = []
+for k in ATD_TAXONOMY.keys():
+    _CLEANED_TAXONOMY_KEYS.append((re.sub(r'[^a-z0-9+ ]', '', k).strip(), k))
+
 def canonicalize_skill(skill_name: str) -> str:
     """Normalize and map skill name to canonical taxonomy keys."""
     name = skill_name.lower().strip()
@@ -302,8 +307,7 @@ def canonicalize_skill(skill_name: str) -> str:
         return aliases[name]
     
     # Check if any taxonomy key is a substring or close match
-    for taxonomy_key in ATD_TAXONOMY.keys():
-        cleaned_key = re.sub(r'[^a-z0-9+ ]', '', taxonomy_key).strip()
+    for cleaned_key, taxonomy_key in _CLEANED_TAXONOMY_KEYS:
         # Exact match of cleaned
         if name == cleaned_key:
             return taxonomy_key
