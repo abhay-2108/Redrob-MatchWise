@@ -94,9 +94,9 @@ def retrain_with_feedback(feature_matrix, candidates):
         "--candidates",
         temp_cands,
         "--model-out",
-        "ranker.xgb",
+        "artifacts/ranker.xgb",
         "--lgb-model-out",
-        "ranker.lgb",
+        "artifacts/ranker.lgb",
         "--feedback",
         "feedback_logs.jsonl",
     ]
@@ -267,11 +267,11 @@ if uploaded is not None:
 
         # Load Models (graceful fallback if missing)
         with st.spinner("Stage 0: Loading ML Models..."):
-            honeypot_path = os.path.join(PROJECT_DIR, "honeypots.json")
+            honeypot_path = os.path.join(PROJECT_DIR, "artifacts", "honeypots.json")
             honeypot_ids = load_honeypots(honeypot_path)
             
-            model_path = os.path.join(PROJECT_DIR, "ranker.xgb")
-            lgb_path = os.path.join(PROJECT_DIR, "ranker.lgb")
+            model_path = os.path.join(PROJECT_DIR, "artifacts", "ranker.xgb")
+            lgb_path = os.path.join(PROJECT_DIR, "artifacts", "ranker.lgb")
             xgb_model = None
             lgb_model = None
             
