@@ -502,6 +502,20 @@ with st.sidebar:
                         st.error("Retraining failed. Check the training output below.")
                         st.code((result.stderr or result.stdout)[-4000:])
 
+    with st.expander("🛠️ Artifact Fingerprints (Debug)"):
+        import hashlib
+        for name, path in [
+            ("XGB Model", os.path.join(PROJECT_DIR, "artifacts", "ranker.xgb")),
+            ("LGB Model", os.path.join(PROJECT_DIR, "artifacts", "ranker.lgb")),
+            ("Features Matrix", os.path.join(PROJECT_DIR, "artifacts", "precomputed_features.npz")),
+            ("Backup JSONL", os.path.join(PROJECT_DIR, "data", "candidates_backup.jsonl.gz")),
+        ]:
+            if os.path.exists(path):
+                h = hashlib.sha256(open(path, "rb").read()).hexdigest()[:8]
+                st.caption(f"**{name}**: `{h}`")
+            else:
+                st.caption(f"**{name}**: `Not Found`")
+
     st.markdown("---")
     st.caption("Built for **Redrob Intelligent Candidate Discovery**")
 
