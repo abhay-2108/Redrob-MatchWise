@@ -1,5 +1,6 @@
 FROM python:3.11-slim
 
+# Force rebuild from scratch (cache-busting): 2026-06-28 18:10:00
 WORKDIR /app
 
 # Install dependencies

@@ -541,7 +541,7 @@ def load_flashrank():
         return None
 
 @st.cache_resource(show_spinner=False)
-def load_sample_dataset(file_path):
+def load_sample_dataset(file_path, mtime=0.0):
     import json
     candidates = []
     with open(file_path, "r", encoding="utf-8") as f:
@@ -563,7 +563,7 @@ def load_sample_dataset(file_path):
     return candidates, candidate_ids, feature_matrix
 
 @st.cache_resource(show_spinner=False)
-def load_precomputed_dataset(features_path, candidates_path):
+def load_precomputed_dataset(features_path, candidates_path, mtime_features=0.0, mtime_candidates=0.0):
     import gzip
     import json
     data = np.load(features_path, allow_pickle=True)
@@ -661,13 +661,18 @@ feature_matrix = np.array([])
 if dataset_source == "Default Sample (50 profiles)":
     with st.spinner("Stage 0: Loading default sample dataset (50 profiles)..."):
         sample_path = os.path.join(PROJECT_DIR, "data", "candidates.jsonl")
-        candidates, candidate_ids, feature_matrix = load_sample_dataset(sample_path)
+        mtime = os.path.getmtime(sample_path) if os.path.exists(sample_path) else 0.0
+        candidates, candidate_ids, feature_matrix = load_sample_dataset(sample_path, mtime=mtime)
 
 elif dataset_source == "Full Dataset (100k profiles)":
     with st.spinner("Stage 0: Loading precomputed full dataset (100k profiles - ~5 seconds)..."):
         features_path = os.path.join(PROJECT_DIR, "artifacts", "precomputed_features.npz")
         candidates_path = os.path.join(PROJECT_DIR, "data", "candidates_backup.jsonl.gz")
-        candidates, candidate_ids, feature_matrix = load_precomputed_dataset(features_path, candidates_path)
+        mtime_f = os.path.getmtime(features_path) if os.path.exists(features_path) else 0.0
+        mtime_c = os.path.getmtime(candidates_path) if os.path.exists(candidates_path) else 0.0
+        candidates, candidate_ids, feature_matrix = load_precomputed_dataset(
+            features_path, candidates_path, mtime_features=mtime_f, mtime_candidates=mtime_c
+        )
 
 elif dataset_source == "Upload Custom File" and uploaded is not None:
     try:
