@@ -26,6 +26,9 @@ Idea Submission Template _ Redrob.pdf
 presentation_deck.md
 job_description.docx
 
+# --- Data ---
+data/
+!data/candidates.jsonl
 
 # --- OpenWork workspace config ---
 .opencode/

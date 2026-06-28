@@ -31,7 +31,7 @@ import time
 import numpy as np
 
 # Import existing taxonomy + helpers from rank.py (kept as library)
-from rank import (
+from src.rank import (
     compute_atd,
     compute_hea,
     generate_reasoning,
@@ -45,10 +45,10 @@ from build_features import FEATURE_NAMES, NUM_FEATURES
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 DIR_PATH = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_FEATURES = os.path.join(DIR_PATH, "precomputed_features.npz")
-DEFAULT_MODEL = os.path.join(DIR_PATH, "ranker.xgb")
-DEFAULT_LGBM = os.path.join(DIR_PATH, "ranker.lgb")
-DEFAULT_HONEYPOTS = os.path.join(DIR_PATH, "honeypots.json")
+DEFAULT_FEATURES = os.path.join(DIR_PATH, "artifacts", "precomputed_features.npz")
+DEFAULT_MODEL = os.path.join(DIR_PATH, "artifacts", "ranker.xgb")
+DEFAULT_LGBM = os.path.join(DIR_PATH, "artifacts", "ranker.lgb")
+DEFAULT_HONEYPOTS = os.path.join(DIR_PATH, "artifacts", "honeypots.json")
 
 # Feature indices for hard filters (must match FEATURE_NAMES order)
 IDX_MAX_ATD = FEATURE_NAMES.index("max_atd_level")

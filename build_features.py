@@ -53,7 +53,7 @@ def _ensure_embedder():
 
 # ─── Import the existing taxonomy from rank.py ────────────────────────
 # We reuse the hand-crafted ATD taxonomy because it's genuinely good.
-from rank import (
+from src.rank import (
     ATD_TAXONOMY,
     ATD_DESC_KEYWORDS,
     CORE_AI_TITLES,
@@ -455,7 +455,7 @@ def main():
     parser = argparse.ArgumentParser(description="Build feature matrix from candidate data")
     parser.add_argument("--candidates", default="./candidates.jsonl",
                         help="Path to candidates JSONL file (.jsonl or .jsonl.gz)")
-    parser.add_argument("--out", default="./precomputed_features.npz",
+    parser.add_argument("--out", default="./artifacts/precomputed_features.npz",
                         help="Output path for the feature matrix")
     args = parser.parse_args()
 

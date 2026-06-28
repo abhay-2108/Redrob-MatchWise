@@ -25,7 +25,7 @@ import streamlit as st
 
 # Import offline feature engineering & taxonomy
 from build_features import extract_features, FEATURE_NAMES, NUM_FEATURES
-from rank import (
+from src.rank import (
     ATD_TAXONOMY,
     CORE_IR_SKILLS,
     compute_atd,

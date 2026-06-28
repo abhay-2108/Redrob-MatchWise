@@ -39,7 +39,7 @@ except ImportError:
     HAS_LIGHTGBM = False
 
 # Import the existing scoring functions to generate proxy labels
-from rank import compute_atd, compute_hea, REF_DATE, SERVICE_COMPANIES
+from src.rank import compute_atd, compute_hea, REF_DATE, SERVICE_COMPANIES
 from build_features import FEATURE_NAMES, NUM_FEATURES
 
 
@@ -497,13 +497,13 @@ def compute_map(y_true: np.ndarray, y_pred: np.ndarray, threshold: int = 3) -> f
 
 def main():
     parser = argparse.ArgumentParser(description="Train XGBoost LambdaMART ranker")
-    parser.add_argument("--features", default="./precomputed_features.npz",
+    parser.add_argument("--features", default="./artifacts/precomputed_features.npz",
                         help="Path to precomputed feature matrix")
-    parser.add_argument("--candidates", default="./candidates.jsonl",
+    parser.add_argument("--candidates", default="./data/candidates.jsonl",
                         help="Path to candidates JSONL file (for label generation)")
-    parser.add_argument("--model-out", default="./ranker.xgb",
+    parser.add_argument("--model-out", default="./artifacts/ranker.xgb",
                         help="Output path for the trained model")
-    parser.add_argument("--lgb-model-out", default="./ranker.lgb",
+    parser.add_argument("--lgb-model-out", default="./artifacts/ranker.lgb",
                         help="Output path for the trained LightGBM model")
     parser.add_argument("--feedback", default=DEFAULT_FEEDBACK_PATH,
                         help="Path to feedback_logs.jsonl for active-learning overrides")
