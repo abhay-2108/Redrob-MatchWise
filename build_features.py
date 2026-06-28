@@ -420,14 +420,12 @@ def extract_features(cand: dict) -> np.ndarray:
     feats[43] = singularity
     
     # ── F. Semantic Features ───────────────────────────────────────────
-    emb, jd = _ensure_embedder()
-    if emb is not None and jd is not None:
-        text_parts = [profile.get("headline", ""), profile.get("summary", "")]
-        text_parts.append(f"Skills: {', '.join(s.get('name', '') for s in skills[:15])}")
-        if career:
-            text_parts.append(f"Recent work: {career[0].get('description', '')[:200]}")
-        cand_text = " ".join(filter(None, text_parts))[:512]
-        cand["_semantic_text"] = cand_text
+    text_parts = [profile.get("headline", ""), profile.get("summary", "")]
+    text_parts.append(f"Skills: {', '.join(s.get('name', '') for s in skills[:15])}")
+    if career:
+        text_parts.append(f"Recent work: {career[0].get('description', '')[:200]}")
+    cand_text = " ".join(filter(None, text_parts))[:512]
+    cand["_semantic_text"] = cand_text
     
     feats[44] = 0.0  # Will be overwritten in main() via batching
 

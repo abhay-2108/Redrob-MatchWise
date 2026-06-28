@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # Import offline feature engineering & taxonomy
-from build_features import extract_features, FEATURE_NAMES, NUM_FEATURES
+from build_features import extract_features, FEATURE_NAMES, NUM_FEATURES, _ensure_embedder
 from src.rank import (
     ATD_TAXONOMY,
     CORE_IR_SKILLS,
@@ -302,12 +302,40 @@ def parse_and_extract(raw_bytes):
         return [], [], np.array([])
         
     feature_matrix = np.zeros((len(candidates), NUM_FEATURES), dtype=np.float32)
-    candidate_ids = []
-    for i, cand in enumerate(candidates):
-        cid = cand.get("candidate_id", "")
-        candidate_ids.append(cid)
-        feature_matrix[i] = extract_features(cand)
-        
+    candidate_ids = [cand.get("candidate_id", "") for cand in candidates]
+    
+    # Run feature extraction in parallel for large datasets
+    if len(candidates) > 500:
+        import os
+        from concurrent.futures import ProcessPoolExecutor
+        num_workers = min(os.cpu_count() or 2, 8)
+        try:
+            chunk = max(100, len(candidates) // (num_workers * 4))
+            with ProcessPoolExecutor(max_workers=num_workers) as executor:
+                results = list(executor.map(extract_features, candidates, chunksize=chunk))
+            for i, feats in enumerate(results):
+                feature_matrix[i] = feats
+        except Exception:
+            # Fallback to sequential
+            for i, cand in enumerate(candidates):
+                feature_matrix[i] = extract_features(cand)
+    else:
+        for i, cand in enumerate(candidates):
+            feature_matrix[i] = extract_features(cand)
+            
+    # Batch encode semantic similarity (feature index 44) if SentenceTransformer is available
+    emb, jd = _ensure_embedder()
+    if emb is not None and jd is not None:
+        semantic_texts = [cand.get("_semantic_text", "") for cand in candidates]
+        try:
+            all_embs = emb.encode(semantic_texts, batch_size=256, show_progress_bar=False)
+            norms = np.linalg.norm(all_embs, axis=1)
+            norms[norms == 0] = 1e-9
+            sims = np.dot(all_embs, jd) / (norms * np.linalg.norm(jd))
+            feature_matrix[:, 44] = sims
+        except Exception:
+            pass
+
     # Replace NaN/Inf hazards
     feature_matrix = np.nan_to_num(feature_matrix, nan=0.0, posinf=1.0, neginf=0.0)
     return candidates, candidate_ids, feature_matrix
