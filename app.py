@@ -1026,33 +1026,31 @@ with tab_search:
     # Download Button logic via placeholder
     df_export = pd.DataFrame(export_rows)
     
-    # Format selector
-    export_fmt = dl_placeholder.radio(
-        "Export format",
-        options=["CSV (.csv)", "Excel (.xlsx)"],
-        horizontal=True,
-        label_visibility="collapsed"
-    )
-    
-    if export_fmt == "CSV (.csv)":
-        export_data = df_export.to_csv(index=False, quoting=csv.QUOTE_ALL)
-        file_name = "streamlit_submission.csv"
-        mime_type = "text/csv"
-    else:
-        buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-            df_export.to_excel(writer, sheet_name="Top 100", index=False)
-        export_data = buf.getvalue()
-        file_name = "streamlit_submission.xlsx"
-        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    
-    dl_placeholder.download_button(
-        label=f"📥 Export Top 100 ({export_fmt})",
-        data=export_data,
-        file_name=file_name,
-        mime=mime_type,
-        use_container_width=True
-    )
+    # Download Button logic via popover using the placeholder
+    with dl_placeholder.container():
+        with st.popover("📥 Export Top 100"):
+            st.markdown("Select format to download:")
+            # CSV Export
+            csv_data = df_export.to_csv(index=False, quoting=csv.QUOTE_ALL)
+            st.download_button(
+                label="📄 CSV (.csv)",
+                data=csv_data,
+                file_name="streamlit_submission.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+            # Excel Export
+            buf = io.BytesIO()
+            with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                df_export.to_excel(writer, sheet_name="Top 100", index=False)
+            excel_data = buf.getvalue()
+            st.download_button(
+                label="📊 Excel (.xlsx)",
+                data=excel_data,
+                file_name="streamlit_submission.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
 
 with tab_eval:
     st.markdown('<div class="section-heading">📈 Evaluation & Offline Benchmarks</div>', unsafe_allow_html=True)
