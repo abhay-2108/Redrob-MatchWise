@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.git/
+.github/
+experiments/
+flashrank_cache/
+feedback_logs.jsonl
+submission.csv
+*.xlsx
+*.csv
+*.log
