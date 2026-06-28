@@ -149,16 +149,17 @@ We compared 5 fusion weight configurations over the candidate database to evalua
 The MatchWise ranking engine is deployed as a Docker container on Hugging Face Spaces:
 
 * **Production Link:** [Redrob MatchWise on Hugging Face](https://huggingface.co/spaces/raj0120/redrob-matchwise)
+* **Docker Hub Repository:** [abhay120/redrob-matchwise](https://hub.docker.com/r/abhay120/redrob-matchwise)
 
 > [!NOTE]
-> Running the pipeline locally versus via the deployed Hugging Face Space produces the same general candidate pool and same ordering. However, due to minor floating-point variations and multi-threaded CPU reduction schedules (OpenMP variations between local Windows environments and Linux cloud containers), there can be minor differences in the final scores and precise ranks.
+> Running the pipeline locally versus via the deployed Hugging Face Space produces the same general candidate pool and relative ordering. However, due to minor floating-point variations and multi-threaded CPU reduction schedules (OpenMP variations between local Windows environments and Linux cloud containers), there can be minor differences in the final scores and precise ranks.
 > **For the most authoritative and exact ranking scores, run the pipeline locally.**
 
 ### Local Container Build
 To build and run the container locally:
 ```bash
-docker build -t redrob-matchwise .
-docker run -p 7860:7860 redrob-matchwise
+docker build -t abhay120/redrob-matchwise:latest .
+docker run -p 7860:7860 abhay120/redrob-matchwise:latest
 ```
 
 ---
