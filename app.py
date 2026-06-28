@@ -289,13 +289,14 @@ def parse_and_extract(raw_bytes):
         else:
             candidates = [parsed]
     except Exception:
-        raw_text = raw_bytes.decode("utf-8")
-        for line in raw_text.splitlines():
+        import io
+        stream = io.BytesIO(raw_bytes)
+        for line in stream:
             line = line.strip()
             if line:
                 try:
-                    candidates.append(json.loads(line))
-                except json.JSONDecodeError:
+                    candidates.append(json.loads(line.decode("utf-8")))
+                except Exception:
                     pass  # Skip the malformed line to prevent crashing the entire stream
                 
     if not candidates:
@@ -357,9 +358,15 @@ elif dataset_source == "Full Dataset (100k profiles)":
         candidates, candidate_ids, feature_matrix = load_precomputed_dataset(features_path, candidates_path)
 
 elif dataset_source == "Upload Custom File" and uploaded is not None:
-    with st.spinner("Stage 0: Extracting offline features from uploaded file..."):
-        raw_bytes = uploaded.getvalue()
-        candidates, candidate_ids, feature_matrix = parse_and_extract(raw_bytes)
+    try:
+        with st.spinner("Stage 0: Extracting offline features from uploaded file..."):
+            raw_bytes = uploaded.getvalue()
+            candidates, candidate_ids, feature_matrix = parse_and_extract(raw_bytes)
+    except Exception as e:
+        import traceback
+        st.error(f"❌ Error processing uploaded file: {e}")
+        st.code(traceback.format_exc(), language="python")
+        st.stop()
 
 if not candidates:
     # Empty State Premium Layout
