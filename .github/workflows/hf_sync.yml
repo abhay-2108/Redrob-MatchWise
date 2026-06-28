@@ -17,12 +17,12 @@ jobs:
       - name: Log in to Hugging Face Container Registry
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: docker login -u raj0120 --password-stdin registry.huggingface.co <<< "$HF_TOKEN"
+        run: docker login -u raj0120 --password-stdin registry.hf.space <<< "$HF_TOKEN"
 
       - name: Build and push Docker image
         run: |
           docker build \
-            -t registry.huggingface.co/raj0120/redrob-matchwise:latest \
-            -t registry.huggingface.co/raj0120/redrob-matchwise:${{ github.sha }} \
+            -t registry.hf.space/raj0120/redrob-matchwise:latest \
+            -t registry.hf.space/raj0120/redrob-matchwise:${{ github.sha }} \
             .
-          docker push --all-tags registry.huggingface.co/raj0120/redrob-matchwise
+          docker push --all-tags registry.hf.space/raj0120/redrob-matchwise
