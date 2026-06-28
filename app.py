@@ -15,6 +15,7 @@ import json
 import os
 import subprocess
 import sys
+import textwrap
 import time
 
 import numpy as np
@@ -34,11 +35,11 @@ from src.rank import (
     load_honeypots,
 )
 
-# Import pipeline constants
+# Import pipeline constants & module (module needed for mutable tuning knobs)
+import rank_v2
 from rank_v2 import (
     IDX_TIMELINE, IDX_INFLATION, IDX_SERVICE, IDX_GHOST, IDX_MAX_ATD,
     IDX_SINGULARITY, IDX_CORE_IR, IDX_DEPTH,
-    W_XGB, W_CE, W_HEURISTIC,
     apply_hard_filters,
     normalize_scores,
     load_lightgbm_model,
@@ -59,10 +60,256 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* Hide Streamlit Default Elements */
+    /* ── Hide Default Streamlit Chrome ── */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+
+    /* ── Typography ── */
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    /* ── Sidebar Branding ── */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+    }
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 {
+        background: linear-gradient(135deg, #38bdf8, #818cf8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+    }
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] hr {
+        border-color: rgba(148, 163, 184, 0.15);
+        margin: 0.75rem 0;
+    }
+
+    /* ── Sidebar Controls ── */
+    [data-testid="stSidebar"] .stSlider label,
+    [data-testid="stSidebar"] .stToggle label,
+    [data-testid="stSidebar"] .stSelectbox label,
+    [data-testid="stSidebar"] .stNumberInput label {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #94a3b8;
+    }
+    [data-testid="stSidebar"] .stSlider [data-baseweb="slider"] {
+        padding-top: 0.25rem;
+    }
+
+    /* ── KPI Metric Cards ── */
+    [data-testid="stMetric"] {
+        background: linear-gradient(135deg, rgba(30,41,59,0.7), rgba(30,41,59,0.4));
+        border: 1px solid rgba(148,163,184,0.12);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        transition: border-color 0.2s;
+    }
+    [data-testid="stMetric"]:hover {
+        border-color: rgba(56,189,248,0.4);
+    }
+    [data-testid="stMetric"] label {
+        font-size: 0.78rem !important;
+        font-weight: 600 !important;
+        color: #94a3b8 !important;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    [data-testid="stMetric"] [data-testid="stMetricValue"] {
+        font-size: 1.6rem !important;
+        font-weight: 700 !important;
+        color: #f1f5f9 !important;
+    }
+
+    /* ── Candidate Card Container ── */
+    .candidate-card {
+        background: linear-gradient(135deg, rgba(30,41,59,0.6) 0%, rgba(15,23,42,0.8) 100%);
+        border: 1px solid rgba(148,163,184,0.1);
+        border-radius: 14px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 0.75rem;
+        transition: all 0.25s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    .candidate-card:hover {
+        border-color: rgba(56,189,248,0.35);
+        box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    }
+    .candidate-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0;
+        width: 4px;
+        height: 100%;
+        border-radius: 4px 0 0 4px;
+    }
+    .rank-gold::before   { background: linear-gradient(180deg, #f59e0b, #d97706); }
+    .rank-silver::before { background: linear-gradient(180deg, #94a3b8, #64748b); }
+    .rank-bronze::before { background: linear-gradient(180deg, #fb923c, #ea580c); }
+    .rank-default::before { background: linear-gradient(180deg, #334155, #1e293b); }
+
+    /* ── Rank Badge ── */
+    .rank-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px; height: 42px;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 1rem;
+        color: #fff;
+        flex-shrink: 0;
+    }
+    .rank-badge-gold   { background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 2px 12px rgba(245,158,11,0.35); }
+    .rank-badge-silver { background: linear-gradient(135deg, #94a3b8, #475569); box-shadow: 0 2px 12px rgba(148,163,184,0.25); }
+    .rank-badge-bronze { background: linear-gradient(135deg, #fb923c, #c2410c); box-shadow: 0 2px 12px rgba(251,146,60,0.25); }
+    .rank-badge-default { background: linear-gradient(135deg, #334155, #1e293b); }
+
+    /* ── Score Bar ── */
+    .score-bar-container {
+        background: rgba(30,41,59,0.5);
+        border-radius: 6px;
+        height: 8px;
+        overflow: hidden;
+        margin: 0.4rem 0;
+    }
+    .score-bar {
+        height: 100%;
+        border-radius: 6px;
+        transition: width 0.6s ease;
+    }
+    .score-bar-gold   { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .score-bar-silver { background: linear-gradient(90deg, #94a3b8, #cbd5e1); }
+    .score-bar-bronze { background: linear-gradient(90deg, #fb923c, #fdba74); }
+    .score-bar-default { background: linear-gradient(90deg, #475569, #64748b); }
+
+    /* ── Skill Pills ── */
+    .skill-pill {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        margin: 2px 3px;
+        letter-spacing: 0.01em;
+    }
+    .skill-core  { background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.25); }
+    .skill-sota  { background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.25); }
+    .skill-other { background: rgba(100,116,139,0.15); color: #94a3b8; border: 1px solid rgba(100,116,139,0.2); }
+
+    /* ── Signal Tags ── */
+    .signal-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin: 2px 0;
+    }
+    .signal-yes { background: rgba(34,197,94,0.12); color: #4ade80; }
+    .signal-no  { background: rgba(239,68,68,0.1);  color: #f87171; }
+
+    /* ── Score Badge ── */
+    .score-badge {
+        display: inline-block;
+        padding: 6px 14px;
+        border-radius: 10px;
+        font-size: 1.3rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+    }
+    .score-badge-gold   { background: linear-gradient(135deg, rgba(245,158,11,0.2), rgba(217,119,6,0.1)); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
+    .score-badge-silver { background: linear-gradient(135deg, rgba(148,163,184,0.15), rgba(71,85,105,0.1)); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.25); }
+    .score-badge-bronze { background: linear-gradient(135deg, rgba(251,146,60,0.15), rgba(194,65,12,0.1)); color: #fdba74; border: 1px solid rgba(251,146,60,0.25); }
+    .score-badge-default { background: linear-gradient(135deg, rgba(71,85,105,0.2), rgba(30,41,59,0.2)); color: #94a3b8; border: 1px solid rgba(71,85,105,0.3); }
+
+    /* ── Hidden Gem Badge ── */
+    .gem-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: linear-gradient(135deg, rgba(245,158,11,0.2), rgba(217,119,6,0.1));
+        color: #fbbf24;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        border: 1px solid rgba(245,158,11,0.3);
+        letter-spacing: 0.02em;
+    }
+
+    /* ── Pipeline Mode Tag ── */
+    .mode-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+    }
+    .mode-ml     { background: linear-gradient(135deg, rgba(56,189,248,0.15), rgba(129,140,248,0.1)); color: #7dd3fc; border: 1px solid rgba(56,189,248,0.25); }
+    .mode-heur   { background: linear-gradient(135deg, rgba(251,146,60,0.12), rgba(194,65,12,0.08)); color: #fdba74; border: 1px solid rgba(251,146,60,0.2); }
+
+    /* ── Section Headings ── */
+    .section-heading {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #f1f5f9;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid rgba(56,189,248,0.2);
+        margin-bottom: 1rem;
+        letter-spacing: -0.01em;
+    }
+
+    /* ── Career History ── */
+    .career-item {
+        padding: 0.6rem 0;
+        border-bottom: 1px solid rgba(148,163,184,0.08);
+    }
+    .career-item:last-child { border-bottom: none; }
+
+    /* ── Tab Styling ── */
+    button[data-baseweb="tab"] {
+        font-weight: 600;
+        font-size: 0.88rem;
+    }
+
+    /* ── Download Button ── */
+    .stDownloadButton > button {
+        background: linear-gradient(135deg, #38bdf8, #818cf8);
+        color: #0f172a;
+        border: none;
+        border-radius: 10px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        transition: all 0.2s;
+    }
+    .stDownloadButton > button:hover {
+        box-shadow: 0 4px 20px rgba(56,189,248,0.35);
+        transform: translateY(-1px);
+    }
+
+    /* ── Feedback Buttons ── */
+    .stButton > button {
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.82rem;
+        transition: all 0.2s;
+    }
+
+    /* ── Expander ── */
+    details[data-testid="stExpander"] {
+        border: 1px solid rgba(148,163,184,0.1) !important;
+        border-radius: 10px !important;
+        background: rgba(30,41,59,0.3);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -122,20 +369,19 @@ def retrain_with_feedback(feature_matrix, candidates):
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 with st.sidebar:
-    st.markdown("### ⚡ Omni-Context Engine")
-    st.markdown("---")
-    
+    st.markdown("### ⚡ MatchWise")
+
     def handle_upload():
         st.session_state.pop("fused", None)
-        
+
+    # ── Dataset ──
     dataset_source = st.selectbox(
-        "Select Dataset to Rank",
+        "Dataset",
         ["Default Sample (50 profiles)", "Full Dataset (100k profiles)", "Upload Custom File"],
         index=0,
         on_change=handle_upload,
-        help="Choose between the sample subset (50 profiles), the pre-installed full set (100k profiles), or uploading your own JSONL file."
+        help="Choose between the sample subset, the pre-installed full set, or upload your own JSONL."
     )
-    
     uploaded = None
     if dataset_source == "Upload Custom File":
         uploaded = st.file_uploader(
@@ -143,38 +389,104 @@ with st.sidebar:
             type=["json", "jsonl", "gz"],
             on_change=handle_upload
         )
-    
+
     st.markdown("---")
-    st.markdown("""
-    **Architecture:**
-    1. **Hard Filtering** (Heuristics)
-    2. **XGBoost LambdaMART** (LTR)
-    3. **FlashRank** (Cross-Encoder)
-    4. **Score Fusion**
-    """)
+
+    # ── Pipeline ──
+    with st.expander("**Pipeline**", expanded=True):
+        use_crossencoder = st.toggle("FlashRank Reranking", value=True,
+            help="Semantic reranking of top candidates. Depth adjustable below.")
+        top_k_xgb = st.number_input("XGBoost Top-K", min_value=10, max_value=500, value=200, step=10,
+            help="How many candidates the ML model scores before reranking.")
+
+    # ── Preset Quick-Select ──
+    PRESET_MAP = {
+        "Default (Balanced)":       (0.40, 0.20, 0.40),
+        "ML Heavy":                 (0.60, 0.25, 0.15),
+        "Heuristic Heavy":          (0.20, 0.10, 0.70),
+        "Semantic Focus":           (0.35, 0.50, 0.15),
+        "Balanced ML+":             (0.45, 0.30, 0.25),
+    }
+    preset_names = list(PRESET_MAP.keys())
+
+    def _apply_preset():
+        name = st.session_state.preset_selector
+        if name in PRESET_MAP:
+            w_xgb, w_ce, w_heur = PRESET_MAP[name]
+            st.session_state.sl_xgb = w_xgb
+            st.session_state.sl_ce = w_ce
+            st.session_state.sl_heur = w_heur
+
+    # ── Score Weights ──
+    with st.expander("**Score Weights**", expanded=True):
+        st.selectbox(
+            "Quick Preset",
+            preset_names,
+            index=0,
+            key="preset_selector",
+            on_change=_apply_preset,
+            help="Pre-tuned weight configurations from A/B experiment. Select, then fine-tune below."
+        )
+        st.caption("Or drag sliders individually — weights auto-normalize.")
+        w1 = st.slider("ML Model", 0.0, 1.0, rank_v2.W_XGB, 0.05, key="sl_xgb",
+            help="XGBoost LambdaMART influence. Higher = trusts learned patterns more.")
+        w2 = st.slider("Semantic Match", 0.0, 1.0, rank_v2.W_CE, 0.05, key="sl_ce",
+            help="Cross-encoder influence. Higher = better skill-meaning matching.")
+        w3 = st.slider("Heuristic Rules", 0.0, 1.0, rank_v2.W_HEURISTIC, 0.05, key="sl_heur",
+            help="Hand-crafted rules influence. Higher = stricter ATD-based ranking.")
+        total = w1 + w2 + w3
+        if total > 0:
+            rank_v2.W_XGB = w1 / total
+            rank_v2.W_CE = w2 / total
+            rank_v2.W_HEURISTIC = w3 / total
+        st.caption(
+            f"**{rank_v2.W_XGB:.0%}** ML · "
+            f"**{rank_v2.W_CE:.0%}** Semantic · "
+            f"**{rank_v2.W_HEURISTIC:.0%}** Heuristic"
+        )
+
+    # ── Advanced ──
+    with st.expander("**Advanced**"):
+        filt_val = st.slider("Filter Aggressiveness", 0.1, 0.9, rank_v2.FILTER_THRESHOLD, 0.05, key="sl_filt",
+            help="Skill-inflation cutoff. 0.5 = 5+ inflated skills filtered.")
+        rank_v2.FILTER_THRESHOLD = filt_val
+        rerank_val = st.slider("Rerank Count", 10, 200, rank_v2.RERANK_DEPTH, 10, key="sl_rerank",
+            help="Candidates getting semantic reranking. More = better quality, slower.")
+        rank_v2.RERANK_DEPTH = rerank_val
+        if st.button("↺ Reset All", use_container_width=True, key="btn_reset"):
+            rank_v2.W_XGB = 0.40
+            rank_v2.W_CE = 0.20
+            rank_v2.W_HEURISTIC = 0.40
+            rank_v2.FILTER_THRESHOLD = 0.5
+            rank_v2.RERANK_DEPTH = 50
+            st.session_state.preset_selector = "Default (Balanced)"
+            st.session_state.sl_xgb = 0.40
+            st.session_state.sl_ce = 0.20
+            st.session_state.sl_heur = 0.40
+            st.rerun()
+
     st.markdown("---")
-    
-    st.markdown("### ⚙️ Pipeline Controls")
-    use_crossencoder = st.toggle("Enable FlashRank (Stage 3)", value=True, 
-                                 help="Uses ms-marco-TinyBERT to semantically rerank top 50 candidates.")
-    top_k_xgb = st.number_input("XGBoost Top-K", min_value=10, max_value=500, value=200, step=10)
-    
-    st.markdown("### 🧪 Evaluation Infrastructure")
-    blind_ab_mode = st.toggle("Blind A/B Test Mode", value=False, help="Interleave Model A (Heuristics) vs Model B (ML) blindly for recruiter feedback.")
-    
+
+    # ── Evaluation ──
+    with st.expander("**Evaluation**"):
+        blind_ab_mode = st.toggle("Blind A/B Mode", value=False,
+            help="Interleave Heuristic vs ML rankings blindly for recruiter feedback.")
+        st.caption("Vote 👍👎 on candidates in the Search tab to build benchmarks.")
+
     st.markdown("---")
-    run_btn = st.button("▶️ Rerun Pipeline", type="primary", use_container_width=True)
+
+    # ── Actions ──
+    run_btn = st.button("▶ Rerun Pipeline", type="primary", use_container_width=True, key="btn_run")
     if run_btn:
         st.session_state["run_pipeline"] = True
 
-    retrain_btn = st.button("🔄 Retrain with Feedback", use_container_width=True)
+    retrain_btn = st.button("🔄 Retrain with Feedback", use_container_width=True, key="btn_retrain")
     if retrain_btn:
         if uploaded is None:
             st.error("Please upload a dataset before retraining.")
         else:
             with st.spinner("Retraining rankers with recruiter feedback..."):
                 try:
-                    # Use the instantly cached parser to get the current uploaded features
                     raw_bytes = uploaded.getvalue()
                     candidates, candidate_ids, feature_matrix = parse_and_extract(raw_bytes)
                     result = retrain_with_feedback(feature_matrix, candidates)
@@ -189,9 +501,9 @@ with st.sidebar:
                     else:
                         st.error("Retraining failed. Check the training output below.")
                         st.code((result.stderr or result.stdout)[-4000:])
-    
+
     st.markdown("---")
-    st.markdown("Built for the **Redrob Intelligent Candidate Discovery**")
+    st.caption("Built for **Redrob Intelligent Candidate Discovery**")
 
 # Initialize Feedback Log
 if "feedback_submitted" not in st.session_state:
@@ -373,22 +685,19 @@ if not candidates:
     st.markdown("<br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown(
-            """
-            <div style="background-color: rgba(30, 41, 59, 0.5); padding: 2rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: center;">
-                <h2 style="margin-bottom: 0;">Welcome to MatchWise v2</h2>
-                <p style="color: #94a3b8; font-size: 1.1rem; margin-top: 10px;">
-                    The Omni-Context Ranking Engine for technical talent.
-                </p>
-                <br>
-                <div style="text-align: left; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
-                    <h4>🚀 Getting Started</h4>
-                    <p>Select a dataset or upload a candidate dataset in the sidebar to benchmark the engine.</p>
-                </div>
+        st.markdown(textwrap.dedent("""\
+        <div style="background-color: rgba(30, 41, 59, 0.5); padding: 2rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: center;">
+            <h2 style="margin-bottom: 0;">Welcome to MatchWise v2</h2>
+            <p style="color: #94a3b8; font-size: 1.1rem; margin-top: 10px;">
+                The Omni-Context Ranking Engine for technical talent.
+            </p>
+            <br>
+            <div style="text-align: left; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                <h4>🚀 Getting Started</h4>
+                <p>Select a dataset or upload a candidate dataset in the sidebar to benchmark the engine.</p>
             </div>
-            """, 
-            unsafe_allow_html=True
-        )
+        </div>
+        """).strip(), unsafe_allow_html=True)
     st.stop()
 
 if "fused" not in st.session_state or st.session_state.get("run_pipeline", False):
@@ -440,14 +749,14 @@ if "fused" not in st.session_state or st.session_state.get("run_pipeline", False
     # ── STAGE 3: FlashRank Reranking ──
     ce_scores = {}
     if use_crossencoder and len(top_indices) > 0:
-        with st.spinner("Stage 3: FlashRank Semantic Reranking (Top 50)..."):
+        with st.spinner(f"Stage 3: FlashRank Semantic Reranking (Top {rank_v2.RERANK_DEPTH})..."):
             try:
                 from flashrank import RerankRequest
                 ranker = load_flashrank()
                 if ranker is not None:
                     # Build passages
                     passages = []
-                    rerank_k = min(len(top_indices), 50)
+                    rerank_k = min(len(top_indices), rank_v2.RERANK_DEPTH)
                     for idx in top_indices[:rerank_k]:
                         cid = candidate_ids[idx]
                         cand = candidates[idx] # Assuming same order
@@ -495,7 +804,7 @@ if "fused" not in st.session_state or st.session_state.get("run_pipeline", False
                 feats = feature_matrix[idx]
                 heuristic_s = feats[IDX_SINGULARITY]
                 
-                final_score = W_XGB * xgb_s + W_CE * ce_s + W_HEURISTIC * heuristic_s
+                final_score = rank_v2.W_XGB * xgb_s + rank_v2.W_CE * ce_s + rank_v2.W_HEURISTIC * heuristic_s
                 fused.append({
                     "idx": idx,
                     "cid": candidate_ids[idx],
@@ -548,26 +857,27 @@ model_mode = st.session_state.get('model_mode', 'ML')
 tab_search, tab_eval = st.tabs(["🔍 Candidate Search", "📈 Evaluation Dashboard"])
 
 with tab_search:
-    # 1. Global KPI Ribbon
-    # Show which mode is active
-    mode_tag = "🧪 Heuristic-Only Mode" if model_mode == "Heuristic" else "🤖 Full ML Pipeline"
-    st.markdown(f"<span style='background:#334155;padding:4px 14px;border-radius:20px;font-size:0.85rem;'>{mode_tag}</span>", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
+    # ── Mode Tag ──
+    mode_cls = "mode-ml" if model_mode == "ML" else "mode-heur"
+    mode_label = "🤖 ML Pipeline" if model_mode == "ML" else "📐 Heuristic Only"
+    st.markdown(f'<div class="mode-tag {mode_cls}">{mode_label}</div>', unsafe_allow_html=True)
+
+    # ── KPI Ribbon ──
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     with kpi1:
-        st.metric("Candidates Scanned", f"{len(candidates):,}")
+        st.metric("📋 Candidates Scanned", f"{len(candidates):,}")
     with kpi2:
-        st.metric("End-to-End Latency", f"{runtime:.2f}s")
+        st.metric("⚡ Latency", f"{runtime:.2f}s")
     with kpi3:
-        st.metric("Viable Matches", f"{len(fused):,}")
+        st.metric("✅ Viable Matches", f"{len(fused):,}")
     with kpi4:
         best_score = fused[0]["score"] if fused else 0
-        st.metric("Top Match Score", f"{best_score:.4f}")
+        st.metric("🏆 Top Score", f"{best_score:.4f}")
 
     st.markdown("<br>", unsafe_allow_html=True)
-        
+
     dl_placeholder = st.empty()
-    st.markdown("### 🏆 Top Recommendations")
+    st.markdown('<div class="section-heading">🏆 Top Recommendations</div>', unsafe_allow_html=True)
         
     export_rows = []
     
@@ -587,89 +897,123 @@ with tab_search:
         atd = float(feats[41])  # exact_atd
         hea = float(feats[42])  # exact_hea
         reasoning = generate_reasoning(cand, rank_idx, atd, hea)
-        
+
         pipeline_note = (
             f" [Pipeline: Score={score:.3f}, "
             f"IR_match={feats[5]:.2f}, "
             f"depth={feats[9]:.2f}]"
         )
         reasoning += pipeline_note
-        
-        # Better structured candidate representation
-        with st.container(border=True):
-            col_main, col_metrics, col_score = st.columns([2.5, 1.5, 1])
-            
-            with col_main:
-                st.subheader(f"#{rank_idx} {prof.get('anonymized_name', cid)}")
-                st.markdown(f"**{prof.get('current_title', 'Unknown Title')}** @ {prof.get('current_company', 'Unknown Company')}")
-                
-                # Use tags for quick demographic info
-                demo_tags = f"📍 {prof.get('location', 'Remote')} | ⏱️ {prof.get('years_of_experience', 0)} Yrs Exp | "
-                demo_tags += f"🎓 {cand.get('education', [{}])[0].get('tier', 'Unknown Tier')}" if cand.get('education') else "🎓 No Edu Data"
-                st.caption(demo_tags)
-                
-                # Skills categorized
-                adv_skills = [s['name'] for s in cand.get('skills', []) if s.get('proficiency') == 'advanced'][:5]
-                other_skills = [s['name'] for s in cand.get('skills', []) if s.get('proficiency') != 'advanced'][:5]
-                
-                if adv_skills:
-                    st.markdown(f"**🔥 Core Strengths:** `{'` `'.join(adv_skills)}`")
-                if other_skills:
-                    st.markdown(f"**Other Skills:** {', '.join(other_skills)}")
-                
-                st.markdown(f"_{prof.get('headline', '')}_")
-                
-                # Hidden Gem badge (matches generate_reasoning logic in rank.py)
-                gem_atd = compute_atd(cand.get("skills", []), cand.get("career_history", []))
-                gem_hea = compute_hea(cand)
-                if gem_hea >= 1.0 and gem_atd < 1.0:
-                    st.markdown(
-                        '<span style="background-color:#f59e0b;color:#1e293b;'
-                        'padding:2px 10px;border-radius:12px;font-size:0.75rem;'
-                        'font-weight:600;">💎 Hidden Gem</span>',
-                        unsafe_allow_html=True,
-                    )
 
-            with col_metrics:
-                st.markdown("**Redrob Signals**")
-                sigs = cand.get("redrob_signals", {})
-                
-                # Signal badges
-                otw = "✅ Open to Work" if sigs.get('open_to_work_flag') else "❌ Not Actively Looking"
-                reloc = "✅ Willing to Relocate" if sigs.get('willing_to_relocate') else "❌ No Relocation"
-                st.caption(f"{otw}")
-                st.caption(f"{reloc}")
-                st.caption(f"**Notice Period:** {sigs.get('notice_period_days', 'N/A')} Days")
-                st.caption(f"**Response Rate:** {sigs.get('recruiter_response_rate', 0)*100:.0f}%")
-                
-            
-            with col_score:
-                if blind_ab_mode:
-                    st.metric("Final Score", "Blind Mode")
-                else:
-                    st.metric("Final Score", f"{score:.4f}")
-                    st.caption(f"Ranker: {item['xgb']:.4f}")
-                    if use_crossencoder:
-                        st.caption(f"FlashRank: {item['ce']:.4f}")
-            
-            # Feedback Buttons
-            f_col1, f_col2, f_col3 = st.columns([1,1,2])
-            with f_col1:
-                if st.button("👍 Good", key=f"up_{cid}_{rank_idx}"):
-                    log_feedback(cid, rank_idx, score, item["model_source"], 1)
-                    st.success("Logged!")
-            with f_col2:
-                if st.button("👎 Reject", key=f"down_{cid}_{rank_idx}"):
-                    log_feedback(cid, rank_idx, score, item["model_source"], -1)
-                    st.error("Logged!")
-            
-            with st.expander("Career History & AI Reasoning"):
-                if not blind_ab_mode:
-                    st.info(reasoning)
-                for job in cand.get("career_history", [])[:3]:
-                    st.markdown(f"- **{job.get('title', '')}** @ {job.get('company', '')} ({job.get('duration_months', 0)} mos)")
-                    if job.get('description'):
-                        st.caption(job.get('description')[:150] + "...")
+        # ── Rank tier styling ──
+        if rank_idx <= 3:
+            tier, badge_cls, bar_cls, score_cls = "gold", "rank-badge-gold", "score-bar-gold", "score-badge-gold"
+        elif rank_idx <= 10:
+            tier, badge_cls, bar_cls, score_cls = "silver", "rank-badge-silver", "score-bar-silver", "score-badge-silver"
+        elif rank_idx <= 25:
+            tier, badge_cls, bar_cls, score_cls = "bronze", "rank-badge-bronze", "score-bar-bronze", "score-badge-bronze"
+        else:
+            tier, badge_cls, bar_cls, score_cls = "default", "rank-badge-default", "score-bar-default", "score-badge-default"
+
+        score_pct = score * 100
+
+        # ── Skills ──
+        core_skills = [s["name"] for s in cand.get("skills", []) if s.get("proficiency") == "advanced"][:5]
+        other_skills = [s["name"] for s in cand.get("skills", []) if s.get("proficiency") != "advanced"][:5]
+
+        # ── Hidden Gem ──
+        gem_atd = compute_atd(cand.get("skills", []), cand.get("career_history", []))
+        gem_hea = compute_hea(cand)
+        is_gem = gem_hea >= 1.0 and gem_atd < 1.0
+        gem_html = '<span class="gem-badge">💎 Hidden Gem</span>' if is_gem else ""
+
+        # ── Skill pills HTML ──
+        core_pills = "".join(f'<span class="skill-pill skill-core">{s}</span>' for s in core_skills)
+        other_pills = "".join(f'<span class="skill-pill skill-other">{s}</span>' for s in other_skills)
+        skills_html = f'<div style="margin-top:6px">{core_pills}{other_pills}</div>' if (core_skills or other_skills) else ""
+
+        # ── Signals HTML ──
+        sigs = cand.get("redrob_signals", {})
+        otw_cls = "signal-yes" if sigs.get("open_to_work_flag") else "signal-no"
+        otw_txt = "✅ Open to Work" if sigs.get("open_to_work_flag") else "❌ Not Looking"
+        reloc_cls = "signal-yes" if sigs.get("willing_to_relocate") else "signal-no"
+        reloc_txt = "✅ Will Relocate" if sigs.get("willing_to_relocate") else "❌ No Relocation"
+        notice = sigs.get("notice_period_days", "N/A")
+        resp = sigs.get("recruiter_response_rate", 0) * 100
+
+        # ── Career (top 3) ──
+        career_items = ""
+        for job in cand.get("career_history", [])[:3]:
+            desc = (job.get("description") or "")[:120]
+            desc = desc + "..." if len(desc) == 120 else desc
+            career_items += f'<div class="career-item"><strong>{job.get("title", "")}</strong> @ {job.get("company", "")} <span style="color:#64748b;font-size:0.75rem">({job.get("duration_months", 0)} mo)</span>'
+            if desc:
+                career_items += f'<br><span style="color:#94a3b8;font-size:0.78rem">{desc}</span>'
+            career_items += '</div>'
+
+        # ── Candidate Name ──
+        name = prof.get("anonymized_name", cid)
+        headline = prof.get("headline", "")
+        edu = ""
+        if cand.get("education"):
+            edu = cand["education"][0].get("tier", "")
+
+        # ── Card HTML ──
+        card_html = textwrap.dedent(f"""\
+        <div class="candidate-card rank-{tier}">
+          <div style="display:flex;gap:16px;align-items:flex-start">
+            <div class="rank-badge {badge_cls}">#{rank_idx}</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+                <div>
+                  <div style="font-size:1.15rem;font-weight:700;color:#f1f5f9;margin-bottom:2px">{name}</div>
+                  <div style="font-size:0.88rem;color:#94a3b8;margin-bottom:2px">{prof.get("current_title", "")} @ {prof.get("current_company", "")}</div>
+                  <div style="font-size:0.78rem;color:#64748b">📍 {prof.get("location", "")} · ⏱️ {prof.get("years_of_experience", 0)} yrs {"· 🎓 " + edu if edu else ""}</div>
+                  {gem_html}
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                  <div class="score-badge {score_cls}">{score:.4f}</div>
+                  <div style="margin-top:6px">
+                    <div class="score-bar-container" style="width:120px">
+                      <div class="score-bar {bar_cls}" style="width:{score_pct}%"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:8px;font-size:0.8rem;color:#64748b;font-style:italic">{headline}</div>
+              {skills_html}
+              <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+                <span class="signal-tag {otw_cls}">{otw_txt}</span>
+                <span class="signal-tag {reloc_cls}">{reloc_txt}</span>
+                <span class="signal-tag signal-no">📅 Notice: {notice}d</span>
+                <span class="signal-tag signal-yes">📞 Response: {resp:.0f}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        """).strip()
+
+        # Strip all leading/trailing whitespace per line to avoid Markdown treating indented lines as code blocks
+        card_html = "".join(line.strip() for line in card_html.split("\n"))
+
+        # ── Render card HTML + Streamlit interactive elements ──
+        st.markdown(card_html, unsafe_allow_html=True)
+
+        # Feedback + career expander (Streamlit interactive parts)
+        fcol1, fcol2, fcol3 = st.columns([1, 1, 4])
+        with fcol1:
+            if st.button("👍 Good", key=f"up_{cid}_{rank_idx}"):
+                log_feedback(cid, rank_idx, score, item["model_source"], 1)
+                st.success("Logged!")
+        with fcol2:
+            if st.button("👎 Reject", key=f"down_{cid}_{rank_idx}"):
+                log_feedback(cid, rank_idx, score, item["model_source"], -1)
+                st.error("Logged!")
+
+        with st.expander("Career History & AI Reasoning"):
+            if not blind_ab_mode:
+                st.info(reasoning)
+            st.markdown(career_items, unsafe_allow_html=True)
 
         # Save to export list
         export_rows.append({
@@ -681,19 +1025,38 @@ with tab_search:
         
     # Download Button logic via placeholder
     df_export = pd.DataFrame(export_rows)
-    csv_data = df_export.to_csv(index=False, quoting=csv.QUOTE_ALL)
+    
+    # Format selector
+    export_fmt = dl_placeholder.radio(
+        "Export format",
+        options=["CSV (.csv)", "Excel (.xlsx)"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    
+    if export_fmt == "CSV (.csv)":
+        export_data = df_export.to_csv(index=False, quoting=csv.QUOTE_ALL)
+        file_name = "streamlit_submission.csv"
+        mime_type = "text/csv"
+    else:
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            df_export.to_excel(writer, sheet_name="Top 100", index=False)
+        export_data = buf.getvalue()
+        file_name = "streamlit_submission.xlsx"
+        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     
     dl_placeholder.download_button(
-        label="📥 Export Top 100 as CSV",
-        data=csv_data,
-        file_name="streamlit_submission.csv",
-        mime="text/csv",
+        label=f"📥 Export Top 100 ({export_fmt})",
+        data=export_data,
+        file_name=file_name,
+        mime=mime_type,
         use_container_width=True
     )
 
 with tab_eval:
-    st.markdown("### 📈 Evaluation & Offline Benchmarks")
-    
+    st.markdown('<div class="section-heading">📈 Evaluation & Offline Benchmarks</div>', unsafe_allow_html=True)
+
     if os.path.exists(FEEDBACK_FILE):
         try:
             logs = []
@@ -701,25 +1064,41 @@ with tab_eval:
                 for line in f:
                     if line.strip():
                         logs.append(json.loads(line))
-                        
+
             if logs:
                 df_logs = pd.DataFrame(logs)
-                
-                st.markdown("#### Real-world A/B Test Results")
-                # Calculate win rates
+
+                # ── A/B Stats ──
                 if "model_source" in df_logs.columns:
-                    ab_stats = df_logs.groupby("model_source")["feedback"].agg(['mean', 'count']).reset_index()
-                    ab_stats.rename(columns={'mean': 'Avg Score (-1 to 1)', 'count': 'Votes'}, inplace=True)
-                    st.dataframe(ab_stats, use_container_width=True)
-                
-                # Trend chart
-                df_logs['date'] = pd.to_datetime(df_logs['timestamp'], unit='s')
-                daily = df_logs.groupby([df_logs['date'].dt.date, 'model_source'])['feedback'].mean().reset_index()
-                fig = px.line(daily, x='date', y='feedback', color='model_source', title="Recruiter Engagement (Moving Average)")
+                    ab_stats = df_logs.groupby("model_source")["feedback"].agg(["mean", "count"]).reset_index()
+                    ab_stats.rename(columns={"mean": "Avg Sentiment", "count": "Total Votes"}, inplace=True)
+                    ab_stats["Avg Sentiment"] = ab_stats["Avg Sentiment"].round(3)
+                    st.markdown("**Real-world A/B Test Results**")
+                    st.dataframe(ab_stats, use_container_width=True, hide_index=True)
+
+                # ── Trend Chart ──
+                df_logs["date"] = pd.to_datetime(df_logs["timestamp"], unit="s")
+                daily = df_logs.groupby([df_logs["date"].dt.date, "model_source"])["feedback"].mean().reset_index()
+                fig = px.line(daily, x="date", y="feedback", color="model_source",
+                              title="Recruiter Engagement Over Time",
+                              labels={"feedback": "Avg Sentiment", "date": ""})
+                fig.update_layout(
+                    template="plotly_dark",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(size=12),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                )
+                fig.update_traces(line=dict(width=2.5))
                 st.plotly_chart(fig, use_container_width=True)
-                
-                st.markdown("#### Raw Feedback Log")
-                st.dataframe(df_logs[['date', 'candidate_id', 'rank_position', 'model_source', 'feedback']].tail(10))
+
+                # ── Recent Feedback ──
+                st.markdown("**Recent Feedback**")
+                st.dataframe(
+                    df_logs[["date", "candidate_id", "rank_position", "model_source", "feedback"]].tail(10),
+                    use_container_width=True,
+                    hide_index=True,
+                )
             else:
                 st.info("No feedback data yet.")
         except Exception as e:

@@ -5,8 +5,8 @@ __pycache__/
 
 # --- Output artifacts (reproducible, not source) ---
 *.csv
-!docs/sample_submission.csv
 !submission.csv
+!docs/sample_submission.csv
 *.bak
 *_importances.npz
 honeypots.json

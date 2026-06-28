@@ -67,6 +67,10 @@ W_HEURISTIC = 0.40  # True singularity score (ATD^1.5)*HEA
 W_STAGE2_XGB = 0.60
 W_STAGE2_LGBM = 0.40
 
+# Tunable thresholds & config (overridable at runtime via import)
+FILTER_THRESHOLD = 0.5       # how strictly to filter skill_inflation etc (0.0=loose, 1.0=strict)
+RERANK_DEPTH = 50            # how many top candidates get semantic reranking
+
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
 # ║                     STAGE 0: LOAD ARTIFACTS                           ║
@@ -154,8 +158,9 @@ def apply_hard_filters(feature_matrix, candidate_ids, honeypot_ids):
     timeline_filter = feature_matrix[:, IDX_TIMELINE] > 0.5
     viable &= ~timeline_filter
     
-    # Filter 3: Extreme skill inflation (>= 5 expert skills with 0 duration)
-    inflation_filter = feature_matrix[:, IDX_INFLATION] >= 0.5  # 5+ inflated skills
+    # Filter 3: Extreme skill inflation (>= N expert skills with 0 duration)
+    # FILTER_THRESHOLD: 0.5 = 5+ inflated skills, 0.3 = 3+, 0.7 = 7+
+    inflation_filter = feature_matrix[:, IDX_INFLATION] >= FILTER_THRESHOLD
     viable &= ~inflation_filter
     
     # Filter 4: Service-company-only career
@@ -170,6 +175,14 @@ def apply_hard_filters(feature_matrix, candidate_ids, honeypot_ids):
     no_skills = feature_matrix[:, IDX_MAX_ATD] < 0.5  # level 0
     viable &= ~no_skills
     
+    # Filter 7: Relocation and Location logic
+    is_india_feat = feature_matrix[:, 39]
+    is_target_city_feat = feature_matrix[:, 40]
+    willing_to_relocate_feat = feature_matrix[:, 27]
+    loc_filter = ((is_india_feat < 0.5) & (willing_to_relocate_feat < 0.5)) | \
+                 ((is_india_feat > 0.5) & (is_target_city_feat < 0.5) & (willing_to_relocate_feat < 0.5))
+    viable &= ~loc_filter
+    
     viable_count = viable.sum()
     t1 = time.time()
     
@@ -179,6 +192,7 @@ def apply_hard_filters(feature_matrix, candidate_ids, honeypot_ids):
     print(f"    Service-only: {service_filter.sum()}")
     print(f"    Ghost candidates: {ghost_filter.sum()}")
     print(f"    Zero skills: {no_skills.sum()}")
+    print(f"    Location/Relocation reject: {loc_filter.sum()}")
     print(f"    -> {viable_count}/{N} candidates remain ({t1 - t0:.2f}s)")
     
     return viable
@@ -546,7 +560,7 @@ def main():
         print("  Stage 3: SKIPPED (--no-crossencoder flag)")
     else:
         ce_scores = cross_encoder_rerank(
-            args.candidates, candidate_ids, top_indices, top_k_rerank=50
+            args.candidates, candidate_ids, top_indices, top_k_rerank=RERANK_DEPTH
         )
     
     # ── Stage 4: Fusion + Output ──

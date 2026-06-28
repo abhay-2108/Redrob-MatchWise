@@ -19,3 +19,6 @@ pandas>=2.0.0
 
 # Evaluation metrics
 # (no extra deps — implemented in pure numpy)
+
+# Excel export
+openpyxl>=3.1.0

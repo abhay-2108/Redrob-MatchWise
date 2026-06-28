@@ -530,7 +530,10 @@ def compute_hea(candidate: dict, weights: dict = None) -> float:
         else:
             return 0.0    # HARD FILTER: India but remote city, not willing to relocate
     else:
-        hea *= w_location_india
+        if willing:
+            hea *= w_location_india
+        else:
+            return 0.0    # HARD FILTER: International candidate, not willing to relocate
 
     # ── 14. Richer Honeypot & Fraud Checks ────────────────────────────
     # A. Timeline overlapping clash (simultaneous full-time stints)
