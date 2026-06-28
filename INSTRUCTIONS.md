@@ -101,7 +101,7 @@ Opens at **[http://localhost:8501](http://localhost:8501)** — explore candidat
 | `app.py` | 🎨 Streamlit web dashboard |
 | `build_features.py` | 🔨 Offline feature engineering |
 | `train_ranker.py` | 🧠 Offline model training |
-| `rank.py` | 📚 Library: taxonomy constants, ATD/HEA |
+| `src/rank.py` | 📚 Library: taxonomy constants, ATD/HEA, singularity engine |
 | `precomputed_features.npz` | 📐 100K×51 feature matrix (pre-built) |
 | `ranker.xgb` / `ranker.lgb` | 🤖 Trained ranking models |
 | `submission.csv` | 📄 Output: top 100 candidates |

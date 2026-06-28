@@ -20,7 +20,7 @@ pip install -r requirements.txt
 python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
 ```
 
-⏱️ ~6 seconds on CPU.
+⏱️ ~8–10 seconds on CPU.
 
 ## 3. Validate
 
@@ -40,17 +40,18 @@ streamlit run app.py
 
 ```bash
 python build_features.py --candidates <path/to/candidates.jsonl>   # ~30 min
-python train_ranker.py                                      # ~5 min
+python train_ranker.py                                                # ~5 min
 ```
 
 ---
 
 ## Resource Footprint
 
-| Metric | Requirement | Our Pipeline |
-|--------|-------------|--------------|
-| Runtime | ≤ 5 min | **~6 sec** |
+| Metric | Requirement | Actual |
+|--------|-------------|--------|
+| Runtime | ≤ 5 min | **~8–10 sec** |
 | Memory | ≤ 16 GB | **~2 GB** |
-| CPU | Required | **Yes** |
-| Network | Offline during ranking | **Yes** |
+| CPU only | Required | **Yes** |
+| No network | Required | **Yes** |
 | Output | 100 rows | **Yes** |
+| Deterministic | Required | **Yes** |
