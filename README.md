@@ -9,11 +9,11 @@ pinned: false
 
 # 🎯 Redrob MatchWise — Multi-Stage Candidate Ranking Engine
 
-A production-grade, CPU-only pipeline that sifts through **100,000 candidate profiles** to surface the **top 100 best-fit** Senior AI Engineers — all in **~6 seconds**.
+A production-grade, CPU-only pipeline that sifts through **100,000 candidate profiles** to surface the **top 100 best-fit** Senior AI Engineers — all in **~8–10 seconds**.
 
 ```
-candidates  ──▶  Stage 1: Hard Filter  ──▶  Stage 2: XGBoost + LightGBM  ──▶  Stage 3: FlashRank Rerank  ──▶  Stage 4: Fusion ──▶  top 100
-(100K)           (59K removed)               (top 200)                        (top 50)                             (40/20/40)        submission.csv
+candidates  ──▶  Stage 1: Hard Filter  ──▶  Stage 2: GBM Ensemble    ──▶  Stage 3: FlashRank Rerank  ──▶  Stage 4: Fusion ──▶  top 100
+(100K)           (~79K removed)              (top 200)                        (top 50)                             (40/20/40)        submission.csv
 ```
 
 ---
@@ -55,7 +55,7 @@ git lfs install && git lfs pull
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Run the pipeline (6 seconds)
+# 3. Run the pipeline (~8–10 seconds)
 python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
 
 # 4. Validate
@@ -86,11 +86,12 @@ Removes candidates that don't meet the bar:
 | 🫥 Ghost profiles | 171 |
 | 📉 Zero-skill profiles | 53,097 |
 | 🎭 Skill inflation fraud | 8 |
+| 🌍 Location/Relocation | 50,498 |
 
-**~40K / 100K** remain — the viable pool.
+**~20.6K / 100K** remain — the viable pool. The location filter (added in the latest pipeline update) is the second-largest filter and ensures international candidates without relocation intent are excluded.
 
 ### Stage 2 — GBM Ensemble Scoring
-Two gradient-boosted rankers (XGBoost 60% + LightGBM 40%) score all ~40K viable candidates. **Top 200** advance.
+Two gradient-boosted rankers (XGBoost 60% + LightGBM 40%) score all ~20.6K viable candidates. **Top 200** advance.
 
 ### Stage 3 — Cross-Encoder Rerank
 FlashRank TinyBERT (ms-marco-TinyBERT-L-2-v2) reranks the top 50 against the job description — a deep semantic relevance check that keyword search can't match.
@@ -98,8 +99,10 @@ FlashRank TinyBERT (ms-marco-TinyBERT-L-2-v2) reranks the top 50 against the job
 ### Stage 4 — Score Fusion
 
 ```
-Final Score = 0.40 × XGBoost  +  0.20 × FlashRank  +  0.40 × Heuristic
+Final Score = 0.40 × GBM Ensemble  +  0.20 × FlashRank  +  0.40 × Heuristic
 ```
+
+Where **GBM Ensemble** = XGBoost LambdaMART (60%) + LightGBM (40%).
 
 The **Heuristic** component uses the proven singularity formula:
 
@@ -137,6 +140,7 @@ A **Quick Preset** dropdown lets you switch between 5 pre-tuned configurations f
 - **Candidate explorer** — browse ranked cards with score breakdown, skill pills, signal tags, and career history
 - **Feedback buttons** — 👍/👎 per candidate to build training data
 - **Retrain with Feedback** — re-tune rankers using collected recruiter evaluations
+- **Multi-format export** — download results as CSV or Excel (.xlsx) with a single click
 
 ```bash
 streamlit run app.py    # → http://localhost:8501
@@ -189,30 +193,34 @@ python ab_experiment.py
 
 | Constraint | Limit | Actual |
 |------------|-------|--------|
-| Runtime | ≤ 300s | **~6s** |
+| Runtime | ≤ 300s | **~8–10s** (measured: 7.4–12.3s across 3 runs) |
 | Memory | ≤ 16 GB | **~2 GB** |
 | CPU only | Required | ✅ |
 | No network | Required | ✅ |
 | Output rows | 100 | ✅ |
 | Monotonic scores | Required | ✅ |
+| Deterministic | Required | ✅ (3 runs, byte-identical) |
 
 ---
 
 ## 🌐 Demo Deployments
 
-| Platform | Link | ML Pipeline? | Notes |
-|----------|------|-------------|-------|
-| **Hugging Face Spaces** | [redrob-matchwise.hf.space](https://huggingface.co/spaces/raj0120/redrob-matchwise) | ✅ Full ML (Docker container) | Must be set to **Container** mode in Space settings (image: `raj0120/redrob-matchwise`) |
-| **Streamlit Cloud** | [redrob-matchwise.streamlit.app](https://redrob-matchwise.streamlit.app/) | ❌ Heuristic-only | Streamlit Cloud does not support Git LFS — model files unavailable. Falls back to `ATD¹·⁵ × HEA` heuristic scoring. |
+| Platform | Link | ML Pipeline? | Status |
+|----------|------|-------------|--------|
+| **Hugging Face Spaces** | [redrob-matchwise.hf.space](https://huggingface.co/spaces/raj0120/redrob-matchwise) | Partial — running older artifacts | ❌ **Out of date** — missing latest model retraining, location filter, and pipeline fixes. Only ~83% candidate overlap with the authoritative pipeline. Needs redeployment. |
+| **Streamlit Cloud** | [redrob-matchwise.streamlit.app](https://redrob-matchwise.streamlit.app/) | ✅ Full ML | ⚠️ **Slightly outdated** — same 100 candidates but fusion scores differ by ~1.5% max. Needs model artifact refresh. |
 
-### Why results differ on Streamlit Cloud vs local
+### Why results differ across deployments
 
-The Streamlit Cloud demo uses **heuristic-only scoring** because model files can't be served through their platform (no LFS support). This gives different rankings than the full ML pipeline run locally. Key differences:
+Our latest pipeline includes changes made *after* these deployments:
 
-- Heuristic mode ranks by `ATD¹·⁵ × HEA` (technical depth × execution agency)
-- Full ML mode uses 40% XGBoost + 20% FlashRank + 40% Heuristic fusion
-- Local results (`submission.csv`) are the authoritative output for submission
-- The Streamlit Cloud dashboard is a **UI demo** — the real evaluation uses the CLI pipeline
+| Change | Local | Streamlit Cloud | HuggingFace |
+|--------|:-----:|:---------------:|:-----------:|
+| XGBoost + LightGBM retraining | ✅ | ❌ (older models) | ❌ |
+| Location hard filter | ✅ | ✅ | ❌ |
+| Fusion weight tuning | ✅ | ✅ | ❌ |
+| Candidate overlap vs local | 100% | 100% | **83.5%** |
+| Score correlation vs local | 1.0000 | 0.9996 | 0.9432 |
 
 ### Running the authoritative pipeline locally
 
@@ -222,23 +230,26 @@ python rank_v2.py --candidates <path/to/candidates.jsonl> --out ./submission.csv
 python docs/validate_submission.py submission.csv
 ```
 
+The pipeline is **fully deterministic** — running it 3 times on the same input produces byte-identical output. See `submission.csv` for the latest authoritative result.
+
 ---
 
 ## 📁 Project Map
 
 ```
-rank_v2.py              # Main pipeline (CLI entry point)
-app.py                  # Streamlit dashboard
+rank_v2.py              # Main pipeline (CLI entry point) — multi-stage ranking
+app.py                  # Streamlit dashboard — tuning, export (CSV + Excel), feedback
 ab_experiment.py        # A/B experiment runner (5 weight presets)
 build_features.py       # Offline: 51-feature extraction
-train_ranker.py         # Offline: model training
-rank.py                 # Library: taxonomy & ATD/HEA helpers
+train_ranker.py         # Offline: XGBoost + LightGBM training
+src/rank.py             # Library: taxonomy, ATD/HEA helpers, heuristic engine
 precomputed_features.npz # 100K × 51 feature matrix
-ranker.xgb / ranker.lgb # Trained models
-submission.csv          # Output: top 100 ranked
-requirements.txt        # Dependencies
+ranker.xgb / ranker.lgb # Trained models (XGBoost + LightGBM)
+honeypots.json          # 293 known-fake candidate IDs
+submission.csv          # Output: top 100 ranked (tracked in git)
+requirements.txt        # Dependencies (openpyxl for Excel export)
 Dockerfile              # Container config
-experiments/            # A/B comparison CSVs
+experiments/            # A/B comparison CSVs & summary
 ```
 
 ---
