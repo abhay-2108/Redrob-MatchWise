@@ -2,23 +2,23 @@
 # Multi-Stage Ranking Pipeline: feature engineering + LambdaMART + cross-encoder
 
 # Core UI
-streamlit>=1.30.0
+streamlit==1.58.0
 
 # Feature engineering & ranking
-numpy>=1.24.0
-xgboost>=2.0.0
-lightgbm>=4.0.0
-sentence-transformers>=2.7.0
+numpy==2.4.6
+xgboost==3.2.0
+lightgbm==4.6.0
+sentence-transformers==5.5.1
 
 # Cross-encoder reranking (CPU-optimized, ~4MB model)
-flashrank>=0.2.0
+flashrank==0.2.10
 
 # UI and Data processing
 plotly>=5.18.0
-pandas>=2.0.0
+pandas==3.0.3
 
 # Evaluation metrics
 # (no extra deps — implemented in pure numpy)
 
 # Excel export
-openpyxl>=3.1.0
+openpyxl==3.1.5
