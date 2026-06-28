@@ -1,4 +1,4 @@
-name: Build & Deploy to HF Spaces
+name: Sync to Hugging Face Spaces
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -14,15 +14,8 @@ jobs:
           fetch-depth: 0
           lfs: true
 
-      - name: Log in to Hugging Face Container Registry
+      - name: Push to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: docker login -u raj0120 --password-stdin registry.hf.space <<< "$HF_TOKEN"
-
-      - name: Build and push Docker image
         run: |
-          docker build \
-            -t registry.hf.space/raj0120/redrob-matchwise:latest \
-            -t registry.hf.space/raj0120/redrob-matchwise:${{ github.sha }} \
-            .
-          docker push --all-tags registry.hf.space/raj0120/redrob-matchwise
+          git push --force https://raj0120:$HF_TOKEN@huggingface.co/spaces/raj0120/redrob-matchwise main
